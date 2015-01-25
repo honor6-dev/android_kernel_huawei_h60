@@ -46,8 +46,8 @@ MOUDULES := drv
 endif
 
 # linux path
-OBB_ANDROID_DIR = $(BALONG_TOPDIR)/../../../..
-export LINUX_KERNEL  := $(OBB_ANDROID_DIR)/kernel
+OBB_ANDROID_DIR = $(BALONG_TOPDIR)/../../../../../..
+export LINUX_KERNEL  := $(OBB_ANDROID_DIR)/kernel/huawei/h60
 export OUT_ANDROID   := $(OBB_ANDROID_DIR)/out/target/product/$(CFG_OS_ANDROID_PRODUCT_NAME)/obj
 export OUT_KERNEL    := $(OBB_ANDROID_DIR)/out/target/product/$(CFG_OS_ANDROID_PRODUCT_NAME)/obj/KERNEL_OBJ
 
@@ -146,9 +146,9 @@ endif
 
 # lte
 lps : comm
-	$(TTIME) $(MAKE)  -C $(BALONG_TOPDIR)/modem/ps/build/tl/APP_CORE 
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/ps/build/tl/APP_CORE 
 lmsp : comm
-	$(TTIME) $(MAKE)  -C $(BALONG_TOPDIR)/modem/oam/build/lt/APP_CORE $(maction)
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/oam/build/lt/APP_CORE $(maction)
 
 ifeq ($(OBB_SEPARATE),true)
 oam_ps :
@@ -159,13 +159,13 @@ oam_ps : lps lmsp gups gumsp
 endif
 
 drv : comm oam_ps
-	$(TTIME) $(MAKE)  -C $(BALONG_TOPDIR)/modem/drv/build/acore $(maction)
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/drv/build/acore $(maction)
 
 # gu
 gups : comm
-	$(TTIME) $(MAKE)   -C $(BALONG_TOPDIR)/modem/ps/build/gu/APP_CORE 
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/ps/build/gu/APP_CORE 
 gumsp : comm
-	$(TTIME) $(MAKE)   -C $(BALONG_TOPDIR)/modem/oam/build/gu/APP_CORE 
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/oam/build/gu/APP_CORE 
 
 $(warning The moudles are $(MOUDULES).)
 
@@ -179,7 +179,7 @@ balong : android
 # android independent image
 %image %.img : comm
 	@echo do [$@]
-	$(TTIME) $(MAKE)  -C $(BALONG_TOPDIR)/modem/drv/build/acore $@
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/drv/build/acore $@
 
 %.mk %akefile :
 	@echo nothing to be done for [$@]
@@ -187,7 +187,7 @@ balong : android
 # 
 %:: comm
 	$(warning do[$@])
-	$(TTIME) $(MAKE)  -C $(BALONG_TOPDIR)/modem/drv/build/acore $@
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/drv/build/acore $@
 # clean is so.....................................................
 CLEAN_MOUDULES :=
 # group 1, null
@@ -260,9 +260,9 @@ showcommands:
 # Used to force goals to build.  Only use for conditionally defined goals.
 .PHONY: FORCE
 pc-lint-msp:
-	$(TTIME) $(MAKE)  -C $(BALONG_TOPDIR)/modem/oam/build/lt/APP_CORE $(maction)
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/oam/build/lt/APP_CORE $(maction)
 pc-lint-drv:
-	$(TTIME) $(MAKE)  -C $(BALONG_TOPDIR)/modem/drv/build/acore $(maction)
+	$(MAKE) -C $(BALONG_TOPDIR)/modem/drv/build/acore $(maction)
 
 .PHONY: $(maction)
 $(maction): pc-lint-msp pc-lint-drv

@@ -6,6 +6,8 @@ import datetime
 import time
 import stat
 import shutil
+import shlex
+import subprocess
 
 def read_argv_from_file(file_obuild_cmd):
 	my_argv = []
@@ -23,7 +25,7 @@ def save_argv_to_file(file_obuild_cmd, my_argv):
 	fil.close()
 				
 def main():
-	top_dir = string.replace(os.path.abspath('..'), '//', '/')
+	top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir))
 	file_obuild_cmd = 'obuild.cmd'
 	start_time = datetime.datetime.now()
 	
@@ -83,8 +85,8 @@ def main():
 			sys.exit(1)
 		
 		# config ccache
-		cfg_cmd=top_dir + "/build/tools/ccache/ccache -M 30G"
-		os.system(cfg_cmd)
+		#cfg_cmd=top_dir + "/build/tools/ccache/ccache -M 30G"
+		#os.system(cfg_cmd)
 		
 		#Define whether is strip version	
 		build_dir      = top_dir + r'/build'
@@ -145,7 +147,7 @@ def main():
 				os.environ['ROOT_WIND_PATH_W'] = 'D:/WindRiver'
 			else:
 				os.environ['ROOT_WIND_PATH_W'] = ''
-				print 'Failed to guess WindRiver Home path. please set env ROOT_WIND_PATH_W or WIND_HOME'
+				#print 'Failed to guess WindRiver Home path. please set env ROOT_WIND_PATH_W or WIND_HOME'
 				#usage()
 				#sys.exit(-1)
 				
@@ -182,8 +184,8 @@ def main():
 		print ">> Output log to " +logfile + " ..."
 
 		# jobs
-		if not params_dict.has_key('-j'):
-			params_string += " -j 20 "
+		#if not params_dict.has_key('-j'):
+		#	params_string += " -j 20 "
 			
 		cmd = "make " + params_string 
 		
@@ -204,8 +206,8 @@ def main():
 		if params_dict.has_key('EA') and params_dict['EA']=='true' :
 			cmd = "emake " + params_string 
 			
-		cmd = cmd + " 1> " + logfile + " 2>&1 "
-		print ">> EXEC: " + cmd
+		#cmd = cmd + " 1> " + logfile + " 2>&1 "
+		#print ">> EXEC: " + cmd
 		
 		if params_dict.has_key('FORTIFY') and params_dict['FORTIFY']=='true' :
 			os.environ['FORTIFY'] = 'true'
@@ -222,7 +224,12 @@ def main():
 			cmd = top_dir + "/build/tools/coverity/bin/cov-build --dir "  + tqe_tmp_dir + " --encoding UTF-8 " + cmd
 		
 		save_argv_to_file(file_obuild_cmd, my_argv)
-		errcode =os.system(cmd)
+
+		args = shlex.split(cmd)
+		p = subprocess.Popen(args, cwd=top_dir, stdout=subprocess.PIPE)
+		streamdata = p.communicate()[0]
+		errcode = p.returncode
+		#errcode =os.system(cmd)
 
 		if params_dict.has_key('FORTIFY') and params_dict['FORTIFY']=='true' :
 			cmd_generat_fpr = top_dir + "/build/tools/fortify/bin/sourceanalyzer -b " + product_name + " -scan -f " + product_name + ".fpr -64 -Xss100M -Xmx80000M"
