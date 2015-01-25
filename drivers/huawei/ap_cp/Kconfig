@@ -1,0 +1,6 @@
+config AP_CP_TIMEOUT
+	tristate "Ap cp communication timeout."
+    default y
+    help
+	  This module adds support for ap cp timeout processing based on
+	  Balong V3R3 chipset.
