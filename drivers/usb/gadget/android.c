@@ -394,7 +394,7 @@ adb_function_bind_config(struct android_usb_function *f,
 {
 	return adb_bind_config(c);
 }
-#if 0
+
 static void adb_android_function_enable(struct android_usb_function *f)
 {
 	struct android_dev *dev = _android_dev;
@@ -403,10 +403,8 @@ static void adb_android_function_enable(struct android_usb_function *f)
 	data->enabled = true;
 
 	/* Disable the gadget until adbd is ready */
-
 	if (!data->opened)
 		android_disable(dev);
-
 }
 
 static void adb_android_function_disable(struct android_usb_function *f)
@@ -420,16 +418,16 @@ static void adb_android_function_disable(struct android_usb_function *f)
 	if (!data->opened)
 		android_enable(dev);
 }
-#endif
+
 static struct android_usb_function adb_function = {
 	.name		= "adb",
-//	.enable		= adb_android_function_enable,
-//	.disable	= adb_android_function_disable,
+	.enable		= adb_android_function_enable,
+	.disable	= adb_android_function_disable,
 	.init		= adb_function_init,
 	.cleanup	= adb_function_cleanup,
 	.bind_config	= adb_function_bind_config,
 };
-#if 0
+
 static void adb_ready_callback(void)
 {
 	struct android_dev *dev = _android_dev;
@@ -459,7 +457,6 @@ static void adb_closed_callback(void)
 
 	mutex_unlock(&dev->mutex);
 }
-#endif
 
 #define MAX_ACM_INSTANCES 8
 struct acm_function_config {
