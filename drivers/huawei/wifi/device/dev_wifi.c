@@ -364,72 +364,16 @@ static ssize_t restore_wifi_debug_level(struct device *dev, struct device_attrib
     return -1;
 }
 
-extern int wl_get_wrong_action_flag(void);
-extern int wl_trigger_disable_nmode(void);
-
-static ssize_t show_wifi_wrong_action_flag(struct device *dev,
-        struct device_attribute *attr, char *buf) {
-    int has_wrong_action = wl_get_wrong_action_flag();
-    printk(KERN_INFO "%s has wrong action %d\n", __func__, has_wrong_action);
-    return sprintf(buf, "%d\n", has_wrong_action);
-}
-
-static ssize_t restore_wifi_arp_timeout(struct device *dev, struct device_attribute *attr,
-        const char *buf, size_t size) {
-    int value;
-    if (sscanf(buf, "%d\n", &value) == 1) {
-        if(value == 1) {
-            printk(KERN_INFO "%s enter should invoke wrong action handler\n", __func__);
-            wl_trigger_disable_nmode();
-        }
-        return size;
-    }
-    return -1;
-}
-
-static ssize_t restore_wifi_wrong_action_debug(struct device *dev, struct device_attribute *attr,
-        const char *buf, size_t size) {
-    int value;
-    if (sscanf(buf, "%d\n", &value) == 1) {
-        if(value == 1) {
-            printk(KERN_INFO "%s enter should invoke wrong action handler\n", __func__);
-            wl_trigger_disable_nmode();
-        }
-        return size;
-    }
-    return -1;
-}
-
 static DEVICE_ATTR(wifi_debug_level, S_IRUGO | S_IWUSR | S_IWGRP,
         show_wifi_debug_level, restore_wifi_debug_level);
-
-static DEVICE_ATTR(wifi_wrong_action_flag, S_IRUGO,
-        show_wifi_wrong_action_flag, NULL);
-
-static DEVICE_ATTR(wifi_arp_timeout, S_IWUSR | S_IWGRP,
-        NULL, restore_wifi_arp_timeout);
-
-static DEVICE_ATTR(wifi_wrong_action_debug, S_IWUSR | S_IWGRP,
-        NULL, restore_wifi_wrong_action_debug);
 
 static struct attribute *attr_debug_attributes[] = {
     &dev_attr_wifi_debug_level.attr,
     NULL
 };
 
-static struct attribute *attr_arp_attributes[] = {
-    &dev_attr_wifi_wrong_action_flag.attr,
-    &dev_attr_wifi_arp_timeout.attr,
-    &dev_attr_wifi_wrong_action_debug.attr,
-    NULL
-};
-
 static const struct attribute_group attrgroup_debug_level = {
     .attrs = attr_debug_attributes,
-};
-
-static const struct attribute_group attrgroup_arp_timeout = {
-	.attrs = attr_arp_attributes,
 };
 
 static int wifi_open_err_code = 0;
@@ -612,11 +556,6 @@ int  wifi_power_probe(struct platform_device *pdev)
 	ret = sysfs_create_group(&bcm_wifi_device.dev.kobj, &attrgroup_debug_level);
 	if (ret) {
 		pr_err("wifi_power_probe create debug level error ret =%d", ret);
-	}
-
-	ret = sysfs_create_group(&bcm_wifi_device.dev.kobj, &attrgroup_arp_timeout);
-	if (ret) {
-		pr_err("wifi_power_probe create arp trigger error ret =%d", ret);
 	}
 
 	ret = sysfs_create_group(&bcm_wifi_device.dev.kobj, &wifi_state);

@@ -122,7 +122,6 @@ int sysctl_tcp_early_retrans __read_mostly = 3;
 #define TCP_HP_BITS (~(TCP_RESERVED_BITS|TCP_FLAG_PSH))
 
 #define HW_TCP_TIMESTAMP_ERR_THRESHOLD    (5)
-extern void hw_dhd_check_and_disable_timestamps(void);
 static void hw_tcp_check_and_disable_timestamps(void);
 
 /* Adapt the MSS value used to make delayed ack decision to the
@@ -5411,7 +5410,7 @@ static void hw_tcp_check_and_disable_timestamps(void)
 	}
 	if (sysctl_tcp_timestamps && (++tcp_ts_err > HW_TCP_TIMESTAMP_ERR_THRESHOLD)) {
 		printk("TCP timestamp error, check network interface and try to disable ts.\n");
-		hw_dhd_check_and_disable_timestamps();
+		//hw_dhd_check_and_disable_timestamps();
 		tcp_ts_err = 0;
 	}
 	last_timestamps = sysctl_tcp_timestamps;
