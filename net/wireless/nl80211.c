@@ -6475,13 +6475,59 @@ __cfg80211_alloc_vendor_skb(struct cfg80211_registered_device *rdev,
 	return NULL;
 }
 
-#ifdef CONFIG_NL80211_TESTMODE
-static struct genl_multicast_group nl80211_testmode_mcgrp = {
-	.name = "testmode",
-};
+struct sk_buff *__cfg80211_alloc_event_skb(struct wiphy *wiphy,
+					   enum nl80211_commands cmd,
+					   enum nl80211_attrs attr,
+					   int vendor_event_idx,
+					   int approxlen, gfp_t gfp)
+{
+	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
+	const struct nl80211_vendor_cmd_info *info;
+
+	switch (cmd) {
+	case NL80211_CMD_TESTMODE:
+		if (WARN_ON(vendor_event_idx != -1))
+			return NULL;
+		info = NULL;
+		break;
+	case NL80211_CMD_VENDOR:
+		if (WARN_ON(vendor_event_idx < 0 ||
+			    vendor_event_idx >= wiphy->n_vendor_events))
+			return NULL;
+		info = &wiphy->vendor_events[vendor_event_idx];
+		break;
+	default:
+		WARN_ON(1);
+		return NULL;
+	}
+
+	return __cfg80211_alloc_vendor_skb(rdev, approxlen, 0, 0,
+					   cmd, attr, info, gfp);
+}
+EXPORT_SYMBOL(__cfg80211_alloc_event_skb);
+
 
 static struct genl_multicast_group nl80211_vendor_mcgrp = {
 	.name = "vendor",
+};
+
+void __cfg80211_send_event_skb(struct sk_buff *skb, gfp_t gfp)
+{
+	struct cfg80211_registered_device *rdev = ((void **)skb->cb)[0];
+	void *hdr = ((void **)skb->cb)[1];
+	struct nlattr *data = ((void **)skb->cb)[2];
+
+	nla_nest_end(skb, data);
+	genlmsg_end(skb, hdr);
+
+	genlmsg_multicast_netns(wiphy_net(&rdev->wiphy), skb, 0,
+				nl80211_vendor_mcgrp.id, gfp);
+}
+EXPORT_SYMBOL(__cfg80211_send_event_skb);
+
+#ifdef CONFIG_NL80211_TESTMODE
+static struct genl_multicast_group nl80211_testmode_mcgrp = {
+	.name = "testmode",
 };
 
 static int nl80211_testmode_do(struct sk_buff *skb, struct genl_info *info)
@@ -6602,53 +6648,6 @@ static int nl80211_testmode_dump(struct sk_buff *skb,
 	return err;
 }
 
-struct sk_buff *__cfg80211_alloc_event_skb(struct wiphy *wiphy,
-					   enum nl80211_commands cmd,
-					   enum nl80211_attrs attr,
-					   int vendor_event_idx,
-					   int approxlen, gfp_t gfp)
-{
-	struct cfg80211_registered_device *rdev = wiphy_to_dev(wiphy);
-	const struct nl80211_vendor_cmd_info *info;
-
-	switch (cmd) {
-	case NL80211_CMD_TESTMODE:
-		if (WARN_ON(vendor_event_idx != -1))
-			return NULL;
-		info = NULL;
-		break;
-	case NL80211_CMD_VENDOR:
-		if (WARN_ON(vendor_event_idx < 0 ||
-			    vendor_event_idx >= wiphy->n_vendor_events))
-			return NULL;
-		info = &wiphy->vendor_events[vendor_event_idx];
-		break;
-	default:
-		WARN_ON(1);
- 		return NULL;
-
-	return __cfg80211_alloc_vendor_skb(rdev, approxlen, 0, 0,
-					   cmd, attr, info, gfp);
-}
-EXPORT_SYMBOL(__cfg80211_alloc_event_skb);
-
-void __cfg80211_send_event_skb(struct sk_buff *skb, gfp_t gfp)
-{
-	struct cfg80211_registered_device *rdev = ((void **)skb->cb)[0];
-	void *hdr = ((void **)skb->cb)[1];
-	struct nlattr *data = ((void **)skb->cb)[2];
-
-	nla_nest_end(skb, data);
-	genlmsg_end(skb, hdr);
-
-	if (data->nla_type == NL80211_ATTR_VENDOR_DATA)
-		genlmsg_multicast_netns(wiphy_net(&rdev->wiphy), skb, 0,
-			nl80211_vendor_mcgrp.id, gfp);
-	else
-		genlmsg_multicast_netns(wiphy_net(&rdev->wiphy), skb, 0,
-			nl80211_testmode_mcgrp.id, gfp);
-}
-EXPORT_SYMBOL(__cfg80211_send_event_skb);
 #endif
 
 static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
@@ -10957,16 +10956,16 @@ int nl80211_init(void)
 	err = genl_register_mc_group(&nl80211_fam, &nl80211_mlme_mcgrp);
 	if (err)
 		goto err_out;
+	err = genl_register_mc_group(&nl80211_fam, &nl80211_vendor_mcgrp);
+	if (err)
+		goto err_out;
 
 #ifdef CONFIG_NL80211_TESTMODE
 	err = genl_register_mc_group(&nl80211_fam, &nl80211_testmode_mcgrp);
 	if (err)
 		goto err_out;
-
-	err = genl_register_mc_group(&nl80211_fam, &nl80211_vendor_mcgrp);
-	if (err)
-		goto err_out;
 #endif
+
 	err = netlink_register_notifier(&nl80211_netlink_notifier);
 	if (err)
 		goto err_out;
