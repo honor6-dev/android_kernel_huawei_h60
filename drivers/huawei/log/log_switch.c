@@ -40,7 +40,7 @@ HWLOG_REGIST();
 extern int hisi_nve_direct_access(struct hisi_nve_info_user *info_user);
 
 /* add log switch, control logmian ect logs can write in or not */
-static int logctl_flag = 0;	//default 0, switch logger off
+static int logctl_flag = 255;	//default 0, switch logger off
 int get_logctl_flag(void)
 {
 	return logctl_flag;
@@ -146,7 +146,7 @@ static int __init logswitch_init(void)
 	int ret=0;
 
 	//get logctl_flag from cmdline
-	logctl_flag = get_logctl_value();
+	//logctl_flag = get_logctl_value();
 	hwlog_info("%s: logctl_value=%d\n", __func__, logctl_flag);
 
 	ret = misc_register(&log_switch_misc_dev);
