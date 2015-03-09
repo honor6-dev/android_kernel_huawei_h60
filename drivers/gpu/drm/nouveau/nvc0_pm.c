@@ -243,30 +243,7 @@ calc_pll(struct drm_device *dev, int clk, u32 freq, u32 *coef)
 	return ret;
 }
 
-/* A (likely rather simplified and incomplete) view of the clock tree
- *
- * Key:
- *
- * S: source select
- * D: divider
- * P: pll
- * F: switch
- *
- * Engine clocks:
- *
- * 137250(D) ---- 137100(F0) ---- 137160(S)/1371d0(D) ------------------- ref
- *                      (F1) ---- 1370X0(P) ---- 137120(S)/137140(D) ---- ref
- *
- * Not all registers exist for all clocks.  For example: clocks >= 8 don't
- * have their own PLL (all tied to clock 7's PLL when in PLL mode), nor do
- * they have the divider at 1371d0, though the source selection at 137160
- * still exists.  You must use the divider at 137250 for these instead.
- *
- * Memory clock:
- *
- * TBD, read_mem() above is likely very wrong...
- *
- */
+
 
 static int
 calc_clk(struct drm_device *dev, int clk, struct nvc0_pm_clock *info, u32 freq)
@@ -329,11 +306,6 @@ calc_mem(struct drm_device *dev, struct nvc0_pm_clock *info, u32 freq)
 	/* mclk pll input freq comes from another pll, make sure it's on */
 	ctrl = nv_rd32(device, 0x132020);
 	if (!(ctrl & 0x00000001)) {
-		/* if not, program it to 567MHz.  nfi where this value comes
-		 * from - it looks like it's in the pll limits table for
-		 * 132000 but the binary driver ignores all my attempts to
-		 * change this value.
-		 */
 		nv_wr32(device, 0x137320, 0x00000103);
 		nv_wr32(device, 0x137330, 0x81200606);
 		nv_wait(device, 0x132020, 0x00010000, 0x00010000);
@@ -410,7 +382,6 @@ prog_clk(struct drm_device *dev, int clk, struct nvc0_pm_clock *info)
 {
 	struct nouveau_device *device = nouveau_dev(dev);
 
-	/* program dividers at 137160/1371d0 first */
 	if (clk < 7 && !info->ssel) {
 		nv_mask(device, 0x1371d0 + (clk * 0x04), 0x80003f3f, info->ddiv);
 		nv_wr32(device, 0x137160 + (clk * 0x04), info->dsrc);

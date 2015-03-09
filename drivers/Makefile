@@ -17,6 +17,7 @@ obj-$(CONFIG_PARISC)		+= parisc/
 obj-$(CONFIG_RAPIDIO)		+= rapidio/
 obj-y				+= video/
 obj-y				+= idle/
+obj-$(CONFIG_TZDRIVER)          += tzdriver/
 
 # IPMI must come before ACPI in order to provide IPMI opregion support
 obj-$(CONFIG_IPMI_HANDLER)	+= char/ipmi/
@@ -82,6 +83,8 @@ obj-$(CONFIG_ATA_OVER_ETH)	+= block/aoe/
 obj-$(CONFIG_PARIDE) 		+= block/paride/
 obj-$(CONFIG_TC)		+= tc/
 obj-$(CONFIG_UWB)		+= uwb/
+obj-y				+= i2c/
+obj-$(CONFIG_SWITCH)		+= switch/
 obj-$(CONFIG_USB_PHY)		+= usb/
 obj-$(CONFIG_USB)		+= usb/
 obj-$(CONFIG_PCI)		+= usb/
@@ -91,7 +94,7 @@ obj-$(CONFIG_GAMEPORT)		+= input/gameport/
 obj-$(CONFIG_INPUT)		+= input/
 obj-$(CONFIG_I2O)		+= message/
 obj-$(CONFIG_RTC_LIB)		+= rtc/
-obj-y				+= i2c/ media/
+obj-y				+= media/
 obj-$(CONFIG_PPS)		+= pps/
 obj-$(CONFIG_PTP_1588_CLOCK)	+= ptp/
 obj-$(CONFIG_W1)		+= w1/
@@ -108,6 +111,7 @@ obj-$(CONFIG_EISA)		+= eisa/
 obj-y				+= lguest/
 obj-$(CONFIG_CPU_FREQ)		+= cpufreq/
 obj-$(CONFIG_CPU_IDLE)		+= cpuidle/
+obj-$(CONFIG_CPU_HOTPLUG)	+= cpuhotplug/
 obj-y				+= mmc/
 obj-$(CONFIG_MEMSTICK)		+= memstick/
 obj-y				+= leds/
@@ -134,7 +138,7 @@ obj-y				+= platform/
 #common clk code
 obj-y				+= clk/
 
-obj-$(CONFIG_MAILBOX)		+= mailbox/
+
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
 obj-$(CONFIG_NFC)		+= nfc/
 obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
@@ -152,3 +156,21 @@ obj-$(CONFIG_IIO)		+= iio/
 obj-$(CONFIG_VME_BUS)		+= vme/
 obj-$(CONFIG_IPACK_BUS)		+= ipack/
 obj-$(CONFIG_NTB)		+= ntb/
+obj-$(CONFIG_HISI_CS)          += coresight/
+obj-y += vcodec/
+obj-$(CONFIG_HIK3_VPP) += vpp/
+obj-$(CONFIG_JPEG_CODEC)	+= jpu/
+# hisi drivers
+obj-y				+= hisi/
+obj-$(CONFIG_HISI_BALONG_MODEM)	+= modem/
+obj-$(CONFIG_HISI_DDR)		+= ddr/
+#IPC/MAILBOX
+obj-y				+= huawei/
+obj-$(CONFIG_OF)                += hsad/
+obj-$(CONFIG_HUAWEI_HW_DEV_DCT) += devdetect/
+
+obj-$(CONFIG_GATOR)		+= gator/
+
+obj-$(CONFIG_TSPDRV)		+= tspdrv/
+
+obj-$(CONFIG_SRECORDER)     += srecorder/

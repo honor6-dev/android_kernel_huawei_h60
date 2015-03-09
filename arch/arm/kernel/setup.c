@@ -37,6 +37,7 @@
 #include <asm/cputype.h>
 #include <asm/elf.h>
 #include <asm/procinfo.h>
+#include <asm/psci.h>
 #include <asm/sections.h>
 #include <asm/setup.h>
 #include <asm/smp_plat.h>
@@ -57,6 +58,11 @@
 #include <asm/virt.h>
 
 #include "atags.h"
+
+#ifdef CONFIG_DUMP_SYS_INFO
+#include <linux/module.h>
+#include <linux/srecorder.h>
+#endif
 
 
 #if defined(CONFIG_FPE_NWFPE) || defined(CONFIG_FPE_FASTFPE)
@@ -135,6 +141,27 @@ EXPORT_SYMBOL(elf_platform);
 
 static const char *cpu_name;
 static const char *machine_name;
+
+#ifdef CONFIG_DUMP_SYS_INFO
+unsigned long get_cpu_name(void)
+{
+    return (unsigned long)&cpu_name;
+}
+EXPORT_SYMBOL(get_cpu_name);
+
+unsigned long get_machine_name(void)
+{
+    return (unsigned long)&machine_name;
+}
+EXPORT_SYMBOL(get_machine_name);
+#endif
+
+#ifdef CONFIG_HISI_ALTER_HARDWARE_NAME
+#define MAX_HARDWARE_NAME 128
+char alter_hardware_name[MAX_HARDWARE_NAME]={0};
+EXPORT_SYMBOL(alter_hardware_name);
+#endif
+
 static char __initdata cmd_line[COMMAND_LINE_SIZE];
 struct machine_desc *machine_desc __initdata;
 
@@ -260,6 +287,19 @@ static int cpu_has_aliasing_icache(unsigned int arch)
 {
 	int aliasing_icache;
 	unsigned int id_reg, num_sets, line_size;
+
+#ifdef CONFIG_BIG_LITTLE
+	/*
+	 * We expect a combination of Cortex-A15 and Cortex-A7 cores.
+	 * A7 = VIPT aliasing I-cache
+	 * A15 = PIPT (non-aliasing) I-cache
+	 * To cater for this discrepancy, let's assume aliasing I-cache
+	 * all the time.  This means unneeded extra work on the A15 but
+	 * only ptrace is affected which is not performance critical.
+	 */
+	if ((read_cpuid_id() & 0xff0ffff0) == 0x410fc0f0)
+		return 1;
+#endif
 
 	/* PIPT caches never alias. */
 	if (icache_is_pipt())
@@ -456,6 +496,13 @@ void __init smp_setup_processor_id(void)
 	for (i = 1; i < nr_cpu_ids; ++i)
 		cpu_logical_map(i) = i == cpu ? 0 : i;
 
+	/*
+	 * clear __my_cpu_offset on boot CPU to avoid hang caused by
+	 * using percpu variable early, for example, lockdep will
+	 * access percpu variable inside lock_release
+	 */
+	set_my_cpu_offset(0);
+
 	printk(KERN_INFO "Booting Linux on physical CPU 0x%x\n", mpidr);
 }
 
@@ -601,6 +648,56 @@ static int __init early_mem(char *p)
 	return 0;
 }
 early_param("mem", early_mem);
+
+#ifdef CONFIG_FEATURE_HUAWEI_EMERGENCY_DATA
+#define DATAMOUNT_FLAG_FAIL 0x0587C90A
+#define DATAMOUNT_FLAG_SUCCESS 0 // datamount_flag initialization value
+
+/*
+ * global variable datamount_flag has two values:
+ * 0 - init value
+ * 1 - reboot caused by ext4_handle_error, or sync_blockdev return EIO
+ */
+static unsigned int datamount_flag = DATAMOUNT_FLAG_SUCCESS;
+unsigned int get_datamount_flag(void)
+{
+    return datamount_flag;
+}
+EXPORT_SYMBOL(get_datamount_flag);
+void set_datamount_flag(int value)
+{
+    datamount_flag = value;
+}
+EXPORT_SYMBOL(set_datamount_flag);
+
+static int __init early_param_boottype(char * p)
+{
+    if (p) {
+        if (!strcmp(p,"MountFail,")) {
+            datamount_flag = DATAMOUNT_FLAG_FAIL;
+        }
+    }
+    return 0;
+}
+early_param("normal_reset_type", early_param_boottype);
+#endif
+
+static int __init early_parse_storage_cmdline(char *p)
+{
+	phys_addr_t size;
+	phys_addr_t start;
+	char *endp;
+
+	start = 0x80000000;
+	size  = memparse(p, &endp);
+	if (*endp == '@')
+		start = memparse(endp + 1, NULL);
+
+	arm_add_memory(start, size);
+
+	return 0;
+}
+early_param("mem_append", early_parse_storage_cmdline);
 
 static void __init request_standard_resources(struct machine_desc *mdesc)
 {
@@ -796,9 +893,15 @@ void __init setup_arch(char **cmdline_p)
 	unflatten_device_tree();
 
 	arm_dt_init_cpu_maps();
+	psci_init();
 #ifdef CONFIG_SMP
 	if (is_smp()) {
-		smp_set_ops(mdesc->smp);
+		if (!mdesc->smp_init || !mdesc->smp_init()) {
+			if (psci_smp_available())
+				smp_set_ops(&psci_smp_ops);
+			else if (mdesc->smp)
+				smp_set_ops(mdesc->smp);
+		}
 		smp_init_cpus();
 	}
 #endif
@@ -875,26 +978,72 @@ static const char *hwcap_str[] = {
 	NULL
 };
 
+#if defined(CONFIG_SMP)
+static int find_in_array(u32 *source, u32 length, u32 cpuid)
+{
+	int i;
+
+	for (i=0; i<length; i++)
+		if (source[i] == cpuid)
+			return 1;
+
+	return 0;
+}
+
+static void print_cpuinfo_array(struct seq_file *m, char *pre, u32 width, u32 *source, u32 length, u32 bit, u32 mask)
+{
+	int i;
+	char str[10] = {0};
+	u32 value, old_value;
+
+	if (pre)
+		sprintf(str, "%s", pre);
+	sprintf(str, "%s%%0%dx", str, width);
+
+	old_value = (source[0] >> bit) & mask;
+	seq_printf(m, str, old_value);
+	for (i=1; i<length; i++) {
+		value = (source[i] >> bit) & mask;
+		if (old_value != value) {
+			seq_puts(m, " & ");
+			seq_printf(m, str, value);
+			old_value = value;
+		}
+	}
+
+	seq_puts(m, "\n");
+}
+#endif
+
 static int c_show(struct seq_file *m, void *v)
 {
-	int i, j;
+	int i;
 	u32 cpuid;
+#if defined(CONFIG_SMP)
+	u32 cpuid_array[NR_CPUS];
+	u32 index = 0;
+#endif
 
-	for_each_online_cpu(i) {
+	cpuid = read_cpuid_id();
+	seq_printf(m, "Processor\t: %s rev %d (%s)\n",
+		   cpu_name, cpuid & 15, elf_platform);
+
+#if defined(CONFIG_SMP)
+    for_each_online_cpu(i) {
 		/*
 		 * glibc reads /proc/cpuinfo to determine the number of
 		 * online processors, looking for lines beginning with
 		 * "processor".  Give glibc what it expects.
 		 */
 		seq_printf(m, "processor\t: %d\n", i);
-		cpuid = is_smp() ? per_cpu(cpu_data, i).cpuid : read_cpuid_id();
-		seq_printf(m, "model name\t: %s rev %d (%s)\n",
-			   cpu_name, cpuid & 15, elf_platform);
+		cpuid = per_cpu(cpu_data, i).cpuid;
+		if (!find_in_array(cpuid_array, index, cpuid))
+			cpuid_array[index++] = cpuid;
 
-#if defined(CONFIG_SMP)
-		seq_printf(m, "BogoMIPS\t: %lu.%02lu\n",
+		seq_printf(m, "BogoMIPS\t: %lu.%02lu\n\n",
 			   per_cpu(cpu_data, i).loops_per_jiffy / (500000UL/HZ),
 			   (per_cpu(cpu_data, i).loops_per_jiffy / (5000UL/HZ)) % 100);
+	}
 #else
 		seq_printf(m, "BogoMIPS\t: %lu.%02lu\n",
 			   loops_per_jiffy / (500000/HZ),
@@ -903,34 +1052,70 @@ static int c_show(struct seq_file *m, void *v)
 		/* dump out the processor features */
 		seq_puts(m, "Features\t: ");
 
-		for (j = 0; hwcap_str[j]; j++)
-			if (elf_hwcap & (1 << j))
-				seq_printf(m, "%s ", hwcap_str[j]);
+		for (i = 0; hwcap_str[i]; i++)
+			if (elf_hwcap & (1 << i))
+				seq_printf(m, "%s ", hwcap_str[i]);
 
-		seq_printf(m, "\nCPU implementer\t: 0x%02x\n", cpuid >> 24);
+		seq_puts(m, "\nCPU implementer\t: ");
+#if defined(CONFIG_SMP)
+		print_cpuinfo_array(m, "0x", 2, cpuid_array, index, 24, 255);
+#else
+		seq_printf(m, "0x%02x\n", cpuid >> 24);
+#endif
+
 		seq_printf(m, "CPU architecture: %s\n",
 			   proc_arch[cpu_architecture()]);
 
 		if ((cpuid & 0x0008f000) == 0x00000000) {
 			/* pre-ARM7 */
-			seq_printf(m, "CPU part\t: %07x\n", cpuid >> 4);
+			seq_puts(m, "CPU part\t: ");
+#if defined(CONFIG_SMP)
+			print_cpuinfo_array(m, NULL, 7, cpuid_array, index, 4, 255);
+#else
+			seq_printf(m, "%07x\n", cpuid >> 4);
+#endif
 		} else {
 			if ((cpuid & 0x0008f000) == 0x00007000) {
 				/* ARM7 */
-				seq_printf(m, "CPU variant\t: 0x%02x\n",
-					   (cpuid >> 16) & 127);
+				seq_puts(m, "CPU variant\t: ");
+#if defined(CONFIG_SMP)
+				print_cpuinfo_array(m, "0x", 2, cpuid_array, index, 16, 127);
+#else
+				seq_printf(m, "0x%02x\n", (cpuid >> 16) & 127);
+#endif
 			} else {
 				/* post-ARM7 */
-				seq_printf(m, "CPU variant\t: 0x%x\n",
-					   (cpuid >> 20) & 15);
+				seq_puts(m, "CPU variant\t: ");
+#if defined(CONFIG_SMP)
+				print_cpuinfo_array(m, "0x", 1, cpuid_array, index, 20, 15);
+#else
+				seq_printf(m, "0x%x\n", (cpuid >> 20) & 15);
+#endif
 			}
-			seq_printf(m, "CPU part\t: 0x%03x\n",
-				   (cpuid >> 4) & 0xfff);
+			seq_puts(m, "CPU part\t: ");
+#if defined(CONFIG_SMP)
+			print_cpuinfo_array(m, "0x", 3, cpuid_array, index, 4, 0xfff);
+#else
+			seq_printf(m, "0x%03x\n", (cpuid >> 4) & 0xfff);
+#endif
 		}
-		seq_printf(m, "CPU revision\t: %d\n\n", cpuid & 15);
-	}
-
+		seq_puts(m, "CPU revision\t: ");
+#if defined(CONFIG_SMP)
+		print_cpuinfo_array(m, NULL, 1, cpuid_array, index, 0, 15);
+		seq_puts(m, "\n");
+#else
+		seq_printf(m, "%d\n\n", cpuid & 15);
+#endif
+#ifdef CONFIG_HISI_ALTER_HARDWARE_NAME
+    if(alter_hardware_name[0] != 0) {
+        seq_printf(m, "Hardware\t: %s\n", alter_hardware_name);
+    }
+    else {
+        seq_printf(m, "Hardware\t: %s\n", machine_name);
+    }
+#else
 	seq_printf(m, "Hardware\t: %s\n", machine_name);
+#endif
 	seq_printf(m, "Revision\t: %04x\n", system_rev);
 	seq_printf(m, "Serial\t\t: %08x%08x\n",
 		   system_serial_high, system_serial_low);

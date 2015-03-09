@@ -121,6 +121,10 @@ int sysctl_tcp_early_retrans __read_mostly = 3;
 #define TCP_REMNANT (TCP_FLAG_FIN|TCP_FLAG_URG|TCP_FLAG_SYN|TCP_FLAG_PSH)
 #define TCP_HP_BITS (~(TCP_RESERVED_BITS|TCP_FLAG_PSH))
 
+#define HW_TCP_TIMESTAMP_ERR_THRESHOLD    (5)
+extern void hw_dhd_check_and_disable_timestamps(void);
+static void hw_tcp_check_and_disable_timestamps(void);
+
 /* Adapt the MSS value used to make delayed ack decision to the
  * real world.
  */
@@ -2896,21 +2900,7 @@ EXPORT_SYMBOL(tcp_valid_rtt_meas);
  */
 static void tcp_ack_saw_tstamp(struct sock *sk, int flag)
 {
-	/* RTTM Rule: A TSecr value received in a segment is used to
-	 * update the averaged RTT measurement only if the segment
-	 * acknowledges some new data, i.e., only if it advances the
-	 * left edge of the send window.
-	 *
-	 * See draft-ietf-tcplw-high-performance-00, section 3.3.
-	 * 1998/04/10 Andrey V. Savochkin <saw@msu.ru>
-	 *
-	 * Changed: reset backoff as soon as we see the first valid sample.
-	 * If we do not, we get strongly overestimated rto. With timestamps
-	 * samples are accepted even from very old segments: f.e., when rtt=1
-	 * increases to 8, we retransmit 5 times and after 8 seconds delayed
-	 * answer arrives rto becomes 120 seconds! If at least one of segments
-	 * in window is lost... Voila.	 			--ANK (010210)
-	 */
+
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	tcp_valid_rtt_meas(sk, tcp_time_stamp - tp->rx_opt.rcv_tsecr);
@@ -5403,6 +5393,30 @@ static bool tcp_rcv_fastopen_synack(struct sock *sk, struct sk_buff *synack,
 	return false;
 }
 
+/* "sysctl_tcp_timestamps" is linked to "/proc/sys/net/ipv4/tcp_timestamps".
+ * default value of "sysctl_tcp_timestamps" is 1.
+ * here will try to disable tcp_timestamps(set to 0) if timestamp error over 5 times
+ * it will be done in dhd driver, because only try it in wlan network.
+ * WARNING: this function only should be called when timestamp err happened.
+ * WARNING: if any more changes for sysctl_tcp_timestamps, please check whole logic.
+ */
+static void hw_tcp_check_and_disable_timestamps(void)
+{
+	static int tcp_ts_err = 0;
+	static int last_timestamps = 0;
+
+	if (0 == last_timestamps && 1 == sysctl_tcp_timestamps) {
+		printk("last_ts init or tcp_timestamps resotre to enabled, clear err count.\n");
+		tcp_ts_err = 0;
+	}
+	if (sysctl_tcp_timestamps && (++tcp_ts_err > HW_TCP_TIMESTAMP_ERR_THRESHOLD)) {
+		printk("TCP timestamp error, check network interface and try to disable ts.\n");
+		hw_dhd_check_and_disable_timestamps();
+		tcp_ts_err = 0;
+	}
+	last_timestamps = sysctl_tcp_timestamps;
+}
+
 static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 					 const struct tcphdr *th, unsigned int len)
 {
@@ -5431,6 +5445,8 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		if (tp->rx_opt.saw_tstamp && tp->rx_opt.rcv_tsecr &&
 		    !between(tp->rx_opt.rcv_tsecr, tp->retrans_stamp,
 			     tcp_time_stamp)) {
+			printk("tcp timestamp error, to check and disable tcp_timestamps.\n");
+			hw_tcp_check_and_disable_timestamps(); /* tcp timestamps workround */
 			NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PAWSACTIVEREJECTED);
 			goto reset_and_undo;
 		}

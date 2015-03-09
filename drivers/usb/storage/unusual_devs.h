@@ -155,7 +155,6 @@ UNUSUAL_DEV(  0x0419, 0xaaf6, 0x0100, 0x0100,
 		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
 		US_FL_IGNORE_RESIDUE ),
 
-/* Reported by Pete Zaitcev <zaitcev@redhat.com>, bz#176584 */
 UNUSUAL_DEV(  0x0420, 0x0001, 0x0100, 0x0100,
 		"GENERIC", "MP3 PLAYER", /* MyMusix PD-205 on the outside. */
 		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
@@ -257,11 +256,7 @@ UNUSUAL_DEV(  0x0451, 0x5416, 0x0100, 0x0100,
 		USB_SC_DEVICE, USB_PR_BULK, NULL,
 		US_FL_NEED_OVERRIDE ),
 
-/*
- * Pete Zaitcev <zaitcev@yahoo.com>, from Patrick C. F. Ernzer, bz#162559.
- * The key does not actually break, but it returns zero sense which
- * makes our SCSI stack to print confusing messages.
- */
+
 UNUSUAL_DEV(  0x0457, 0x0150, 0x0100, 0x0100,
 		"USBest Technology",	/* sold by Transcend */
 		"USB Mass Storage Device",
@@ -1321,10 +1316,7 @@ UNUSUAL_DEV(  0x0d49, 0x7310, 0x0000, 0x9999,
 		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
 		US_FL_SANE_SENSE),
 
-/*
- * Pete Zaitcev <zaitcev@yahoo.com>, bz#164688.
- * The device blatantly ignores LUN and returns 1 in GetMaxLUN.
- */
+
 UNUSUAL_DEV( 0x0c45, 0x1060, 0x0100, 0x0100,
 		"Unknown",
 		"Unknown",

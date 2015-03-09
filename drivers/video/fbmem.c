@@ -1086,6 +1086,7 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	struct fb_event event;
 	void __user *argp = (void __user *)arg;
 	long ret = 0;
+	bool *blank_in_suspend = NULL;
 
 	switch (cmd) {
 	case FBIOGET_VSCREENINFO:
@@ -1184,6 +1185,13 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		unlock_fb_info(info);
 		break;
 	case FBIOBLANK:
+		blank_in_suspend = (bool *)info->par;
+		if (info == registered_fb[0] &&  arg == FB_BLANK_UNBLANK
+			&& blank_in_suspend && *blank_in_suspend) {
+			*blank_in_suspend = false;
+			break;
+		}
+
 		if (!lock_fb_info(info))
 			return -ENODEV;
 		console_lock();

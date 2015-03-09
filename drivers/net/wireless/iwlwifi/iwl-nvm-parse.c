@@ -371,7 +371,6 @@ iwl_parse_nvm_data(struct device *dev, const struct iwl_cfg *cfg,
 	data->xtal_calib[0] = *(nvm_calib + XTAL_CALIB);
 	data->xtal_calib[1] = *(nvm_calib + XTAL_CALIB + 1);
 
-	/* The byte order is little endian 16 bit, meaning 214365 */
 	memcpy(hw_addr, nvm_hw + HW_ADDR, ETH_ALEN);
 	data->hw_addr[0] = hw_addr[1];
 	data->hw_addr[1] = hw_addr[0];

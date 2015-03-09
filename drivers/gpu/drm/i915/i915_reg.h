@@ -3241,7 +3241,7 @@
 #define   SPRITE_FORMAT_XR_BGR101010	(5<<25) /* Extended range */
 #define   SPRITE_PIPE_CSC_ENABLE	(1<<24)
 #define   SPRITE_SOURCE_KEY		(1<<22)
-#define   SPRITE_RGB_ORDER_RGBX		(1<<20) /* only for 888 and 161616 */
+#define   SPRITE_RGB_ORDER_RGBX		(1<<20)
 #define   SPRITE_YUV_TO_RGB_CSC_DISABLE	(1<<19)
 #define   SPRITE_YUV_CSC_FORMAT_BT709	(1<<18) /* 0 is BT601 */
 #define   SPRITE_YUV_BYTE_ORDER_MASK	(3<<16)

@@ -427,7 +427,7 @@ ENDPROC(xscale_dma_unmap_area)
  *
  * See erratum #25 of "Intel 80200 Processor Specification Update",
  * revision January 22, 2003, available at:
- *     http://www.intel.com/design/iio/specupdt/273415.htm
+ *     http:
  */
 .macro a0_alias basename
 	.globl xscale_80200_A0_A1_\basename

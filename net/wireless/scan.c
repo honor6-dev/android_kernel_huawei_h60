@@ -55,7 +55,7 @@
  * also linked into the probe response struct.
  */
 
-#define IEEE80211_SCAN_RESULT_EXPIRE	(30 * HZ)
+#define IEEE80211_SCAN_RESULT_EXPIRE	(3 * HZ)
 
 static void bss_free(struct cfg80211_internal_bss *bss)
 {
@@ -161,20 +161,39 @@ static void __cfg80211_bss_expire(struct cfg80211_registered_device *dev,
 		dev->bss_generation++;
 }
 
-void ___cfg80211_scan_done(struct cfg80211_registered_device *rdev, bool leak)
+static DEFINE_MUTEX(scan_done);
+static struct cfg80211_registered_device *g_rdev = NULL;
+void ___cfg80211_scan_done(struct cfg80211_registered_device *rdev,
+								bool send_message)
 {
 	struct cfg80211_scan_request *request;
 	struct wireless_dev *wdev;
+	struct sk_buff *msg;
 #ifdef CONFIG_CFG80211_WEXT
 	union iwreq_data wrqu;
 #endif
 
-	lockdep_assert_held(&rdev->sched_scan_mtx);
+	ASSERT_RTNL();
+	mutex_lock(&scan_done);
 
+	if (rdev->scan_msg) {
+		nl80211_send_scan_result(rdev, rdev->scan_msg);
+		rdev->scan_msg = NULL;
+		pr_err("send scan abort message.\n");
+		if(g_rdev){
+			g_rdev =NULL;
+		}
+		mutex_unlock(&scan_done);
+		return;
+	}
+ 
 	request = rdev->scan_req;
 
-	if (!request)
+	if (!request){
+		pr_err("request has been released.\n");
+		mutex_unlock(&scan_done);
 		return;
+	}
 
 	wdev = request->wdev;
 
@@ -186,17 +205,15 @@ void ___cfg80211_scan_done(struct cfg80211_registered_device *rdev, bool leak)
 	if (wdev->netdev)
 		cfg80211_sme_scan_done(wdev->netdev);
 
-	if (request->aborted) {
-		nl80211_send_scan_aborted(rdev, wdev);
-	} else {
-		if (request->flags & NL80211_SCAN_FLAG_FLUSH) {
-			/* flush entries from previous scans */
-			spin_lock_bh(&rdev->bss_lock);
-			__cfg80211_bss_expire(rdev, request->scan_start);
-			spin_unlock_bh(&rdev->bss_lock);
-		}
-		nl80211_send_scan_done(rdev, wdev);
+	if (!request->aborted &&
+	    request->flags & NL80211_SCAN_FLAG_FLUSH) {
+		/* flush entries from previous scans */
+		spin_lock_bh(&rdev->bss_lock);
+		__cfg80211_bss_expire(rdev, request->scan_start);
+		spin_unlock_bh(&rdev->bss_lock);
 	}
+
+	msg = nl80211_build_scan_msg(rdev, wdev, request->aborted);
 
 #ifdef CONFIG_CFG80211_WEXT
 	if (wdev->netdev && !request->aborted) {
@@ -211,16 +228,17 @@ void ___cfg80211_scan_done(struct cfg80211_registered_device *rdev, bool leak)
 
 	rdev->scan_req = NULL;
 
-	/*
-	 * OK. If this is invoked with "leak" then we can't
-	 * free this ... but we've cleaned it up anyway. The
-	 * driver failed to call the scan_done callback, so
-	 * all bets are off, it might still be trying to use
-	 * the scan request or not ... if it accesses the dev
-	 * in there (it shouldn't anyway) then it may crash.
-	 */
-	if (!leak)
-		kfree(request);
+	kfree(request);
+
+	if (!send_message){
+		pr_err("WIFI_DBG, build abort message.\n");
+		g_rdev = rdev;
+		rdev->scan_msg = msg;
+	}
+	else
+		nl80211_send_scan_result(rdev, msg);
+
+	mutex_unlock(&scan_done);
 }
 
 void __cfg80211_scan_done(struct work_struct *wk)
@@ -230,18 +248,33 @@ void __cfg80211_scan_done(struct work_struct *wk)
 	rdev = container_of(wk, struct cfg80211_registered_device,
 			    scan_done_wk);
 
-	mutex_lock(&rdev->sched_scan_mtx);
-	___cfg80211_scan_done(rdev, false);
-	mutex_unlock(&rdev->sched_scan_mtx);
+	rtnl_lock();
+	___cfg80211_scan_done(rdev, true);
+	rtnl_unlock();
 }
 
 void cfg80211_scan_done(struct cfg80211_scan_request *request, bool aborted)
 {
+
+	mutex_lock(&scan_done);
+
 	trace_cfg80211_scan_done(request, aborted);
+
+	if (g_rdev) {
+		pr_err("WIFI_DBG, %s: scan abort.\n", __FUNCTION__);
+		nl80211_send_scan_result(g_rdev, g_rdev->scan_msg);
+		g_rdev->scan_msg = NULL;
+		g_rdev = NULL;
+		mutex_unlock(&scan_done);
+		return;
+	}
+
 	WARN_ON(request != wiphy_to_dev(request->wiphy)->scan_req);
 
 	request->aborted = aborted;
 	queue_work(cfg80211_wq, &wiphy_to_dev(request->wiphy)->scan_done_wk);
+
+	mutex_unlock(&scan_done);
 }
 EXPORT_SYMBOL(cfg80211_scan_done);
 
@@ -253,7 +286,7 @@ void __cfg80211_sched_scan_results(struct work_struct *wk)
 	rdev = container_of(wk, struct cfg80211_registered_device,
 			    sched_scan_results_wk);
 
-	mutex_lock(&rdev->sched_scan_mtx);
+	rtnl_lock();
 
 	request = rdev->sched_scan_req;
 
@@ -270,7 +303,7 @@ void __cfg80211_sched_scan_results(struct work_struct *wk)
 		nl80211_send_sched_scan_results(rdev, request->dev);
 	}
 
-	mutex_unlock(&rdev->sched_scan_mtx);
+	rtnl_unlock();
 }
 
 void cfg80211_sched_scan_results(struct wiphy *wiphy)
@@ -289,9 +322,9 @@ void cfg80211_sched_scan_stopped(struct wiphy *wiphy)
 
 	trace_cfg80211_sched_scan_stopped(wiphy);
 
-	mutex_lock(&rdev->sched_scan_mtx);
+	rtnl_lock();
 	__cfg80211_stop_sched_scan(rdev, true);
-	mutex_unlock(&rdev->sched_scan_mtx);
+	rtnl_unlock();
 }
 EXPORT_SYMBOL(cfg80211_sched_scan_stopped);
 
@@ -300,7 +333,7 @@ int __cfg80211_stop_sched_scan(struct cfg80211_registered_device *rdev,
 {
 	struct net_device *dev;
 
-	lockdep_assert_held(&rdev->sched_scan_mtx);
+	ASSERT_RTNL();
 
 	if (!rdev->sched_scan_req)
 		return -ENOENT;
@@ -1062,7 +1095,6 @@ int cfg80211_wext_siwscan(struct net_device *dev,
 	if (IS_ERR(rdev))
 		return PTR_ERR(rdev);
 
-	mutex_lock(&rdev->sched_scan_mtx);
 	if (rdev->scan_req) {
 		err = -EBUSY;
 		goto out;
@@ -1169,9 +1201,7 @@ int cfg80211_wext_siwscan(struct net_device *dev,
 		dev_hold(dev);
 	}
  out:
-	mutex_unlock(&rdev->sched_scan_mtx);
 	kfree(creq);
-	cfg80211_unlock_rdev(rdev);
 	return err;
 }
 EXPORT_SYMBOL_GPL(cfg80211_wext_siwscan);
@@ -1470,10 +1500,8 @@ int cfg80211_wext_giwscan(struct net_device *dev,
 	if (IS_ERR(rdev))
 		return PTR_ERR(rdev);
 
-	if (rdev->scan_req) {
-		res = -EAGAIN;
-		goto out;
-	}
+	if (rdev->scan_req)
+		return -EAGAIN;
 
 	res = ieee80211_scan_results(rdev, info, extra, data->length);
 	data->length = 0;
@@ -1482,8 +1510,6 @@ int cfg80211_wext_giwscan(struct net_device *dev,
 		res = 0;
 	}
 
- out:
-	cfg80211_unlock_rdev(rdev);
 	return res;
 }
 EXPORT_SYMBOL_GPL(cfg80211_wext_giwscan);

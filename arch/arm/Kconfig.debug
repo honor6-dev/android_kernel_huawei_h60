@@ -63,6 +63,43 @@ config DEBUG_USER
 	      8 - SIGSEGV faults
 	     16 - SIGBUS faults
 
+config DEBUG_RODATA
+	bool "Write protect kernel text section"
+	default n
+	depends on DEBUG_KERNEL && MMU
+	---help---
+	  Mark the kernel text section as write-protected in the pagetables,
+	  in order to catch accidental (and incorrect) writes to such const
+	  data. This will cause the size of the kernel, plus up to 4MB, to
+	  be mapped as pages instead of sections, which will increase TLB
+	  pressure.
+	  If in doubt, say "N".
+
+config DEBUG_RODATA_TEST
+	bool "Testcase for the DEBUG_RODATA feature"
+	depends on DEBUG_RODATA
+	default n
+	---help---
+	  This option enables a testcase for the DEBUG_RODATA
+	  feature.
+	  If in doubt, say "N"
+
+config DEBUG_HI3630_UART0_SUPPORT
+	bool "Hisilicon HI3630 Debug UART0 Support"
+	depends on ARCH_HISI
+	default n
+	---help---
+	   Say y here if you want kernel low-level debugging support
+	   on HI3630 UART0.
+
+config DEBUG_HI3630_UART6_SUPPORT
+	bool "Hisilicon HI3630 Debug UART6 Support"
+	depends on ARCH_HISI
+	default n
+	---help---
+	   Say y here if you want kernel low-level debugging support
+	   on HI3630 UART6.
+
 # These options are only for real kernel hackers who want to get their hands dirty.
 config DEBUG_LL
 	bool "Kernel low-level debugging functions (read help!)"
@@ -250,6 +287,34 @@ choice
 		help
 		  Say Y here if you want kernel low-level debugging support
 		  on i.MX6Q/DL.
+
+	config DEBUG_HI3620_UART0
+		bool "Hisilicon HI3620 Debug UART0"
+		depends on ARCH_HS
+		help
+		  Say Y here if you want kernel low-level debugging support
+		  on HI3620 UART0.
+
+	config DEBUG_HI3716_UART0
+		bool "Hisilicon HI3716 Debug UART0"
+		depends on ARCH_HS
+		help
+		  Say Y here if you want kernel low-level debugging support
+		  on HI3716 UART0.
+
+	config DEBUG_HI3630_UART0
+		bool "Hisilicon HI3630 Debug UART0"
+		depends on DEBUG_HI3630_UART0_SUPPORT
+		help
+		  Set DEBUG_HI3630_UART0_SUPPORT y if you want kernel low-level debugging support
+		  on HI3630 UART0.
+
+	config DEBUG_HI3630_UART6
+		bool "Hisilicon HI3630 Debug UART6"
+		depends on DEBUG_HI3630_UART6_SUPPORT
+		help
+		  Set DEBUG_HI3630_UART6_SUPPORT y if you want kernel low-level debugging support
+		  on HI3630 UART6.
 
 	config DEBUG_MMP_UART2
 		bool "Kernel low-level debugging message via MMP UART2"
@@ -623,6 +688,7 @@ config DEBUG_LL_INCLUDE
 	default "debug/cns3xxx.S" if DEBUG_CNS3XXX
 	default "debug/exynos.S" if DEBUG_EXYNOS_UART
 	default "debug/highbank.S" if DEBUG_HIGHBANK_UART
+	default "debug/hisilicon.S" if DEBUG_HI3620_UART0 || DEBUG_HI3716_UART0 || DEBUG_HI3630_UART0 || DEBUG_HI3630_UART6
 	default "debug/icedcc.S" if DEBUG_ICEDCC
 	default "debug/imx.S" if DEBUG_IMX1_UART || \
 				 DEBUG_IMX25_UART || \

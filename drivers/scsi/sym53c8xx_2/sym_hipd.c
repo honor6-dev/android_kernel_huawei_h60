@@ -791,11 +791,7 @@ static int sym_prepare_setting(struct Scsi_Host *shost, struct sym_hcb *np, stru
 	if (np->features & FE_NOPM)
 		np->rv_ccntl0	|= (ENPMJ);
 
- 	/*
-	 *  C1010-33 Errata: Part Number:609-039638 (rev. 1) is fixed.
-	 *  In dual channel mode, contention occurs if internal cycles
-	 *  are used. Disable internal cycles.
-	 */
+
 	if (pdev->device == PCI_DEVICE_ID_LSI_53C1010_33 &&
 	    pdev->revision < 0x1)
 		np->rv_ccntl0	|=  DILS;

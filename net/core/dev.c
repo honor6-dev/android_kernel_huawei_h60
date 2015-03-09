@@ -1327,7 +1327,7 @@ static int __dev_close_many(struct list_head *head)
 		 *	We allow it to be called even after a DETACH hot-plug
 		 *	event.
 		 */
-		if (ops->ndo_stop)
+		if (ops && ops->ndo_stop)
 			ops->ndo_stop(dev);
 
 		dev->flags &= ~IFF_UP;

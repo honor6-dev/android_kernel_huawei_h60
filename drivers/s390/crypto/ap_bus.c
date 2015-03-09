@@ -108,8 +108,6 @@ static DEFINE_MUTEX(ap_poll_thread_mutex);
 static DEFINE_SPINLOCK(ap_poll_timer_lock);
 static void *ap_interrupt_indicator;
 static struct hrtimer ap_poll_timer;
-/* In LPAR poll with 4kHz frequency. Poll every 250000 nanoseconds.
- * If z/VM change to 1500000 nanoseconds to adjust to z/VM polling.*/
 static unsigned long long poll_timeout = 250000;
 
 /* Suspend flag */

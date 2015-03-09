@@ -996,40 +996,32 @@ static int ext4_write_begin(struct file *file, struct address_space *mapping,
 		ret = ext4_try_to_write_inline_data(mapping, inode, pos, len,
 						    flags, pagep);
 		if (ret < 0)
-			return ret;
-		if (ret == 1)
-			return 0;
+			goto out;
+		if (ret == 1) {
+			ret = 0;
+			goto out;
+		}
 	}
 
-	/*
-	 * grab_cache_page_write_begin() can take a long time if the
-	 * system is thrashing due to memory pressure, or if the page
-	 * is being written back.  So grab it first before we start
-	 * the transaction handle.  This also allows us to allocate
-	 * the page (if needed) without using GFP_NOFS.
-	 */
-retry_grab:
-	page = grab_cache_page_write_begin(mapping, index, flags);
-	if (!page)
-		return -ENOMEM;
-	unlock_page(page);
-
-retry_journal:
+retry:
 	handle = ext4_journal_start(inode, EXT4_HT_WRITE_PAGE, needed_blocks);
 	if (IS_ERR(handle)) {
-		page_cache_release(page);
-		return PTR_ERR(handle);
+		ret = PTR_ERR(handle);
+		goto out;
 	}
 
-	lock_page(page);
-	if (page->mapping != mapping) {
-		/* The page got truncated from under us */
-		unlock_page(page);
-		page_cache_release(page);
+	/* We cannot recurse into the filesystem as the transaction is already
+	 * started */
+	flags |= AOP_FLAG_NOFS;
+
+	page = grab_cache_page_write_begin(mapping, index, flags);
+	if (!page) {
 		ext4_journal_stop(handle);
-		goto retry_grab;
+		ret = -ENOMEM;
+		goto out;
 	}
-	wait_on_page_writeback(page);
+
+	*pagep = page;
 
 	if (ext4_should_dioread_nolock(inode))
 		ret = __block_write_begin(page, pos, len, ext4_get_block_write);
@@ -1044,6 +1036,7 @@ retry_journal:
 
 	if (ret) {
 		unlock_page(page);
+		page_cache_release(page);
 		/*
 		 * __block_write_begin may have instantiated a few blocks
 		 * outside i_size.  Trim these off again. Don't need
@@ -1067,14 +1060,11 @@ retry_journal:
 			if (inode->i_nlink)
 				ext4_orphan_del(NULL, inode);
 		}
-
-		if (ret == -ENOSPC &&
-		    ext4_should_retry_alloc(inode->i_sb, &retries))
-			goto retry_journal;
-		page_cache_release(page);
-		return ret;
 	}
-	*pagep = page;
+
+	if (ret == -ENOSPC && ext4_should_retry_alloc(inode->i_sb, &retries))
+		goto retry;
+out:
 	return ret;
 }
 
@@ -2671,52 +2661,42 @@ static int ext4_da_write_begin(struct file *file, struct address_space *mapping,
 						      pos, len, flags,
 						      pagep, fsdata);
 		if (ret < 0)
-			return ret;
-		if (ret == 1)
-			return 0;
+			goto out;
+		if (ret == 1) {
+			ret = 0;
+			goto out;
+		}
 	}
 
-	/*
-	 * grab_cache_page_write_begin() can take a long time if the
-	 * system is thrashing due to memory pressure, or if the page
-	 * is being written back.  So grab it first before we start
-	 * the transaction handle.  This also allows us to allocate
-	 * the page (if needed) without using GFP_NOFS.
-	 */
-retry_grab:
-	page = grab_cache_page_write_begin(mapping, index, flags);
-	if (!page)
-		return -ENOMEM;
-	unlock_page(page);
-
+retry:
 	/*
 	 * With delayed allocation, we don't log the i_disksize update
 	 * if there is delayed block allocation. But we still need
 	 * to journalling the i_disksize update if writes to the end
 	 * of file which has an already mapped buffer.
 	 */
-retry_journal:
 	handle = ext4_journal_start(inode, EXT4_HT_WRITE_PAGE, 1);
 	if (IS_ERR(handle)) {
-		page_cache_release(page);
-		return PTR_ERR(handle);
+		ret = PTR_ERR(handle);
+		goto out;
 	}
+	/* We cannot recurse into the filesystem as the transaction is already
+	 * started */
+	flags |= AOP_FLAG_NOFS;
 
-	lock_page(page);
-	if (page->mapping != mapping) {
-		/* The page got truncated from under us */
-		unlock_page(page);
-		page_cache_release(page);
+	page = grab_cache_page_write_begin(mapping, index, flags);
+	if (!page) {
 		ext4_journal_stop(handle);
-		goto retry_grab;
+		ret = -ENOMEM;
+		goto out;
 	}
-	/* In case writeback began while the page was unlocked */
-	wait_on_page_writeback(page);
+	*pagep = page;
 
 	ret = __block_write_begin(page, pos, len, ext4_da_get_block_prep);
 	if (ret < 0) {
 		unlock_page(page);
 		ext4_journal_stop(handle);
+		page_cache_release(page);
 		/*
 		 * block_write_begin may have instantiated a few blocks
 		 * outside i_size.  Trim these off again. Don't need
@@ -2724,16 +2704,11 @@ retry_journal:
 		 */
 		if (pos + len > inode->i_size)
 			ext4_truncate_failed_write(inode);
-
-		if (ret == -ENOSPC &&
-		    ext4_should_retry_alloc(inode->i_sb, &retries))
-			goto retry_journal;
-
-		page_cache_release(page);
-		return ret;
 	}
 
-	*pagep = page;
+	if (ret == -ENOSPC && ext4_should_retry_alloc(inode->i_sb, &retries))
+		goto retry;
+out:
 	return ret;
 }
 

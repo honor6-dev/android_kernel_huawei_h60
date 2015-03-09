@@ -233,8 +233,7 @@ static inline bool ip_is_fragment(const struct iphdr *iph)
 #ifdef CONFIG_INET
 #include <net/dst.h>
 
-/* The function in 2.2 was invalid, producing wrong result for
- * check=0xFEFF. It was noticed by Arthur Skawina _year_ ago. --ANK(000625) */
+
 static inline
 int ip_decrease_ttl(struct iphdr *iph)
 {

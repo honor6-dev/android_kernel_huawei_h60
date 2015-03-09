@@ -1207,7 +1207,7 @@ static void asus_hides_smbus_hostbridge(struct pci_dev *dev)
 			}
 		else if (dev->device == PCI_DEVICE_ID_INTEL_82810_IG3)
 			switch(dev->subsystem_device) {
-			case 0xB16C: /* Compaq Deskpro EP 401963-001 (PCA# 010174) */
+			case 0xB16C:
 				/* Motherboard doesn't have Host bridge
 				 * subvendor/subdevice IDs, therefore checking
 				 * its on-board VGA controller */

@@ -609,32 +609,7 @@ static void cp210x_get_termios_port(struct usb_serial_port *port,
 	*cflagp = cflag;
 }
 
-/*
- * CP2101 supports the following baud rates:
- *
- *	300, 600, 1200, 1800, 2400, 4800, 7200, 9600, 14400, 19200, 28800,
- *	38400, 56000, 57600, 115200, 128000, 230400, 460800, 921600
- *
- * CP2102 and CP2103 support the following additional rates:
- *
- *	4000, 16000, 51200, 64000, 76800, 153600, 250000, 256000, 500000,
- *	576000
- *
- * The device will map a requested rate to a supported one, but the result
- * of requests for rates greater than 1053257 is undefined (see AN205).
- *
- * CP2104, CP2105 and CP2110 support most rates up to 2M, 921k and 1M baud,
- * respectively, with an error less than 1%. The actual rates are determined
- * by
- *
- *	div = round(freq / (2 x prescale x request))
- *	actual = freq / (2 x prescale x div)
- *
- * For CP2104 and CP2105 freq is 48Mhz and prescale is 4 for request <= 365bps
- * or 1 otherwise.
- * For CP2110 freq is 24Mhz and prescale is 4 for request <= 300bps or 1
- * otherwise.
- */
+
 static void cp210x_change_speed(struct tty_struct *tty,
 		struct usb_serial_port *port, struct ktermios *old_termios)
 {

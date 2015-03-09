@@ -75,24 +75,7 @@ static struct shrinker nfsd_reply_cache_shrinker = {
 static DEFINE_SPINLOCK(cache_lock);
 static DECLARE_DELAYED_WORK(cache_cleaner, cache_cleaner_func);
 
-/*
- * Put a cap on the size of the DRC based on the amount of available
- * low memory in the machine.
- *
- *  64MB:    8192
- * 128MB:   11585
- * 256MB:   16384
- * 512MB:   23170
- *   1GB:   32768
- *   2GB:   46340
- *   4GB:   65536
- *   8GB:   92681
- *  16GB:  131072
- *
- * ...with a hard cap of 256k entries. In the worst case, each entry will be
- * ~1k, so the above numbers should give a rough max of the amount of memory
- * used in k.
- */
+
 static unsigned int
 nfsd_cache_size_limit(void)
 {

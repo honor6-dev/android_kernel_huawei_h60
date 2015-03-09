@@ -1,0 +1,34 @@
+/*
+ *  Copyright (C) 2013 Huawei co Ltd.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License version 2 as
+ *  publishhed by the Free Software Foundation.
+ */
+
+/ {
+    gps_power:gps_power{
+        compatible = "huawei,gps_power";
+        huawei,gps_cal_req = <12>;
+        huawei,gps_en = <95>;
+        huawei,gps_refclk = <23>;
+        huawei,gps_blanking = <24>;
+        clocks = <&clk_pmu32kc>;
+        clock-names = "apb_pclk";
+        /*huawei,gps_power-supply = <&buck5>;
+        pinctrl-names = "default";
+        pinctrl-0 = <&uart3_pmx_func &uart3_cfg_func>;*/
+        status = "disabled";
+    };
+	gps_47531:gps_47531{
+	    compatible = "huawei,gps_47531";
+        huawei,gps_cal_req = <12>;
+        huawei,gps_en = <95>;
+        huawei,gps_refclk = <23>;
+        huawei,gps_blanking = <24>;
+		huawei,gps_hostwake = <&gpio26 2 0>;
+        clocks = <&clk_pmu32kc>;
+        clock-names = "apb_pclk";
+        status = "disabled";
+	};
+};

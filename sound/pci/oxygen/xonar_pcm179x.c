@@ -213,7 +213,7 @@
 #define GPIO_ST_HP		0x0080
 
 #define I2C_DEVICE_PCM1796(i)	(0x98 + ((i) << 1))	/* 10011, ii, /W=0 */
-#define I2C_DEVICE_CS2000	0x9c			/* 100111, 0, /W=0 */
+#define I2C_DEVICE_CS2000	0x9c
 
 #define PCM1796_REG_BASE	16
 

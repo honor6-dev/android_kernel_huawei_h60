@@ -3177,7 +3177,6 @@ static unsigned long __i915_gfx_val(struct drm_i915_private *dev_priv)
 
 	/* Revel in the empirically derived constants */
 
-	/* Correction factor in 1/100000 units */
 	if (t > 80)
 		corr = ((t * 2349) + 135940);
 	else if (t >= 50)

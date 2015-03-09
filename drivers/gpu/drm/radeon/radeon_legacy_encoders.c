@@ -972,8 +972,6 @@ static void radeon_legacy_tmds_ext_mode_set(struct drm_encoder *encoder,
 			else
 				fp2_gen_cntl |= RADEON_FP2_PAD_FLOP_EN | R300_FP2_DVO_CLOCK_MODE_SINGLE;
 
-			/*if (mode->clock > 165000)
-			  fp2_gen_cntl |= R300_FP2_DVO_DUAL_CHANNEL_EN;*/
 		}
 		if (!radeon_combios_external_tmds_setup(encoder))
 			radeon_external_tmds_setup(encoder);

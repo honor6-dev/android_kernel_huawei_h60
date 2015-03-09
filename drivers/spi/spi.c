@@ -39,6 +39,9 @@
 #include <linux/ioport.h>
 #include <linux/acpi.h>
 
+extern void print_spi_registers(struct spi_master * master);
+extern void cleanup_spi(struct spi_master *master);
+
 static void spidev_release(struct device *dev)
 {
 	struct spi_device	*spi = to_spi_device(dev);
@@ -1509,6 +1512,7 @@ static int __spi_sync(struct spi_device *spi, struct spi_message *message,
 	DECLARE_COMPLETION_ONSTACK(done);
 	int status;
 	struct spi_master *master = spi->master;
+	unsigned long remain_time;
 
 	message->complete = spi_complete;
 	message->context = &done;
@@ -1522,8 +1526,14 @@ static int __spi_sync(struct spi_device *spi, struct spi_message *message,
 		mutex_unlock(&master->bus_lock_mutex);
 
 	if (status == 0) {
-		wait_for_completion(&done);
+		remain_time = wait_for_completion_timeout(&done, msecs_to_jiffies(20000));
 		status = message->status;
+		if (0 == remain_time) {
+			dev_err(&spi->dev, "message status=%d,spi driver wait for completion timeout\n", message->status);
+			status = -ETIME;
+			print_spi_registers(master);
+                        cleanup_spi(master);
+		}
 	}
 	message->context = NULL;
 	return status;

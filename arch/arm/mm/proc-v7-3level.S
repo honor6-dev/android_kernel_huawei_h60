@@ -79,24 +79,7 @@ ENTRY(cpu_v7_set_pte_ext)
 	mov	pc, lr
 ENDPROC(cpu_v7_set_pte_ext)
 
-	/*
-	 * Memory region attributes for LPAE (defined in pgtable-3level.h):
-	 *
-	 *   n = AttrIndx[2:0]
-	 *
-	 *			n	MAIR
-	 *   UNCACHED		000	00000000
-	 *   BUFFERABLE		001	01000100
-	 *   DEV_WC		001	01000100
-	 *   WRITETHROUGH	010	10101010
-	 *   WRITEBACK		011	11101110
-	 *   DEV_CACHED		011	11101110
-	 *   DEV_SHARED		100	00000100
-	 *   DEV_NONSHARED	100	00000100
-	 *   unused		101
-	 *   unused		110
-	 *   WRITEALLOC		111	11111111
-	 */
+
 .equ	PRRR,	0xeeaa4400			@ MAIR0
 .equ	NMRR,	0xff000004			@ MAIR1
 

@@ -13,6 +13,16 @@
  */
 BLOCKING_NOTIFIER_HEAD(reboot_notifier_list);
 
+
+#ifdef CONFIG_SRECORDER
+#ifdef CONFIG_POWERCOLLAPSE
+#ifndef CONFIG_KPROBES
+RAW_NOTIFIER_HEAD(emergency_reboot_notifier_list);
+#endif /* CONFIG_KPROBES */
+#endif /* CONFIG_POWERCOLLAPSE */
+#endif /* CONFIG_SRECORDER */
+
+
 /*
  *	Notifier chain core routines.  The exported routines below
  *	are layered on top of these, with appropriate locking added.

@@ -495,6 +495,8 @@ static int __cfg80211_mlme_disassoc(struct cfg80211_registered_device *rdev,
 	req.local_state_change = local_state_change;
 	req.ie = ie;
 	req.ie_len = ie_len;
+        if (!wdev->current_bss)
+                return -ENOTCONN;
 	if (ether_addr_equal(wdev->current_bss->pub.bssid, bssid))
 		req.bss = &wdev->current_bss->pub;
 	else

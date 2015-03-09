@@ -143,9 +143,7 @@ static struct sk_buff *ulog_alloc_skb(unsigned int size)
 	struct sk_buff *skb;
 	unsigned int n;
 
-	/* alloc skb which should be big enough for a whole
-	 * multipart message. WARNING: has to be <= 131000
-	 * due to slab allocator restrictions */
+
 
 	n = max(size, nlbufsiz);
 	skb = alloc_skb(n, GFP_ATOMIC | __GFP_NOWARN);

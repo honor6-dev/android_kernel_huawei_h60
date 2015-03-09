@@ -806,7 +806,6 @@ static bool _rtl88ee_init_mac(struct ieee80211_hw *hw)
 	u8 bytetmp;
 	u16 wordtmp;
 
-	/*Disable XTAL OUTPUT for power saving. YJ, add, 111206. */
 	bytetmp = rtl_read_byte(rtlpriv, REG_XCK_OUT_CTRL) & (~BIT(0));
 	rtl_write_byte(rtlpriv, REG_XCK_OUT_CTRL, bytetmp);
 	/*Auto Power Down to CHIP-off State*/

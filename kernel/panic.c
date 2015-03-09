@@ -26,13 +26,19 @@
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
 
+/* Machine specific panic information string */
+char *mach_panic_string;
+
 int panic_on_oops = CONFIG_PANIC_ON_OOPS_VALUE;
 static unsigned long tainted_mask;
 static int pause_on_oops;
 static int pause_on_oops_flag;
 static DEFINE_SPINLOCK(pause_on_oops_lock);
 
-int panic_timeout;
+#ifndef CONFIG_PANIC_TIMEOUT
+#define CONFIG_PANIC_TIMEOUT 0
+#endif
+int panic_timeout = CONFIG_PANIC_TIMEOUT;
 EXPORT_SYMBOL_GPL(panic_timeout);
 
 ATOMIC_NOTIFIER_HEAD(panic_notifier_list);
@@ -56,7 +62,9 @@ void __weak panic_smp_self_stop(void)
 	while (1)
 		cpu_relax();
 }
-
+#ifdef CONFIG_HISI_REBOOT_TYPE
+extern void set_panic_resetflag(void);
+#endif
 /**
  *	panic - halt the system
  *	@fmt: The text string to print
@@ -65,6 +73,39 @@ void __weak panic_smp_self_stop(void)
  *
  *	This function never returns.
  */
+#define DILEID_SIZE	48
+#define ATESN_SIZE 	16
+char die_id[DILEID_SIZE] = {0};
+char ate_sn[ATESN_SIZE] = {0};
+
+static int __init read_die_id(char *p)
+{
+	if (NULL == p) {
+		printk(KERN_ERR "read die id failed.\n");
+		return 0;
+	}
+
+	strncpy(die_id, p, DILEID_SIZE);
+	die_id[DILEID_SIZE -1] = '\0';
+	printk(KERN_EMERG "DIEID=%s\n", die_id);
+	return 1;
+}
+early_param("DIEID", read_die_id);
+
+static int __init read_ate_info(char *p)
+{
+	if (NULL == p) {
+		printk(KERN_ERR "read ate info failed.\n");
+		return 0;
+	}
+
+	strncpy(ate_sn, p, ATESN_SIZE);
+	ate_sn[ATESN_SIZE - 1] = '\0';
+	printk(KERN_EMERG "ATESN=%s\n", ate_sn);
+	return 1;
+}
+early_param("ATESN", read_ate_info);
+
 void panic(const char *fmt, ...)
 {
 	static DEFINE_SPINLOCK(panic_lock);
@@ -99,6 +140,7 @@ void panic(const char *fmt, ...)
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
+	printk(KERN_EMERG "DIEID=%s, ATESN=%s\n", die_id, ate_sn);
 	printk(KERN_EMERG "Kernel panic - not syncing: %s\n",buf);
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
@@ -147,14 +189,20 @@ void panic(const char *fmt, ...)
 			mdelay(PANIC_TIMER_STEP);
 		}
 	}
+
 	if (panic_timeout != 0) {
 		/*
 		 * This will not be a clean reboot, with everything
 		 * shutting down.  But if there is a chance of
 		 * rebooting the system it will be rebooted.
 		 */
+#ifdef CONFIG_HISI_REBOOT_TYPE
+		/* set flag for reset_type*/
+		set_panic_resetflag();
+#endif
 		emergency_restart();
 	}
+
 #ifdef __sparc__
 	{
 		extern int stop_a_enabled;
@@ -375,6 +423,11 @@ late_initcall(init_oops_id);
 void print_oops_end_marker(void)
 {
 	init_oops_id();
+
+	if (mach_panic_string)
+		printk(KERN_WARNING "Board Information: %s\n",
+		       mach_panic_string);
+
 	printk(KERN_WARNING "---[ end trace %016llx ]---\n",
 		(unsigned long long)oops_id);
 }

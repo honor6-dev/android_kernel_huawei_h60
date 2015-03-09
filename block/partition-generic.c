@@ -216,10 +216,21 @@ static void part_release(struct device *dev)
 	kfree(p);
 }
 
+static int part_uevent(struct device *dev, struct kobj_uevent_env *env)
+{
+	struct hd_struct *part = dev_to_part(dev);
+
+	add_uevent_var(env, "PARTN=%u", part->partno);
+	if (part->info && part->info->volname[0])
+		add_uevent_var(env, "PARTNAME=%s", part->info->volname);
+	return 0;
+}
+
 struct device_type part_type = {
 	.name		= "partition",
 	.groups		= part_attr_groups,
 	.release	= part_release,
+	.uevent		= part_uevent,
 };
 
 static void delete_partition_rcu_cb(struct rcu_head *head)
@@ -411,11 +422,15 @@ static int drop_partitions(struct gendisk *disk, struct block_device *bdev)
 	return 0;
 }
 
+struct emmc_partition g_emmc_partition[MAX_EMMC_PARTITION_NUM];
 int rescan_partitions(struct gendisk *disk, struct block_device *bdev)
 {
 	struct parsed_partitions *state = NULL;
 	struct hd_struct *part;
 	int p, highest, res;
+
+	struct emmc_partition *p_emmc_partition;
+	p_emmc_partition = g_emmc_partition;
 rescan:
 	if (state && !IS_ERR(state)) {
 		free_partitions(state);
@@ -520,12 +535,32 @@ rescan:
 			       disk->disk_name, p, -PTR_ERR(part));
 			continue;
 		}
+
+		strncpy(p_emmc_partition->name, state->parts[p].info.volname, sizeof(state->parts[p].info.volname));
+		p_emmc_partition->start = state->parts[p].from;
+		p_emmc_partition->size_sectors = state->parts[p].size;
+		p_emmc_partition->flags = 1;
+
+		p_emmc_partition++;
+
 #ifdef CONFIG_BLK_DEV_MD
 		if (state->parts[p].flags & ADDPART_FLAG_RAID)
 			md_autodetect_dev(part_to_dev(part)->devt);
 #endif
 	}
+
+	p_emmc_partition = &g_emmc_partition[0];
+	while(strcmp(p_emmc_partition->name, "") != 0){
+		if(strcmp(p_emmc_partition->name, "system") == 0){
+			pr_info("[HW]:%s, %d: partitionname = %s \n", __func__, __LINE__, p_emmc_partition->name);
+			pr_info("[HW]:%s, %d: partition start from = %lld \n", __func__, __LINE__, p_emmc_partition->start);
+			pr_info("[HW]:%s, %d: partition size = %lld \n", __func__, __LINE__, p_emmc_partition->size_sectors);
+		}
+		p_emmc_partition++;
+	}
+
 	free_partitions(state);
+
 	return 0;
 }
 

@@ -1,0 +1,12 @@
+
+
+/{
+		hisi_hsic:hsic@ff07e000 {
+			compatible = "hisilicon,hi3630-hsic";
+			reg = <0xff07e000 0x1000>;
+			interrupts = <0 116 4>;
+			clocks = <&hclk_gate_usb2host &clk_gate_usbhost48 &clk_gate_usbhost12 &clk_gate_usb2host_ref &clk_gate_hsic>;
+			clock-names = "hclk_usb2host", "clk_usbhost48", "clk_usbhost12", "clk_usb2hostref", "clk_hsic";
+			status = "disabled";
+		};
+};

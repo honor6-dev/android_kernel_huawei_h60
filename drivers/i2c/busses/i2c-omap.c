@@ -1112,7 +1112,7 @@ omap_i2c_probe(struct platform_device *pdev)
 
 	match = of_match_device(of_match_ptr(omap_i2c_of_match), &pdev->dev);
 	if (match) {
-		u32 freq = 100000; /* default to 100000 Hz */
+		u32 freq = 100000;
 
 		pdata = match->data;
 		dev->flags = pdata->flags;

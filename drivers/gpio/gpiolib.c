@@ -28,7 +28,6 @@
  * only an instruction or two per bit.
  */
 
-
 /* When debugging, extend minimal trust to callers and platform code.
  * Also emit diagnostic messages that may help initial bringup, when
  * board setup or driver bugs are most common.
@@ -136,7 +135,7 @@ static struct gpio_desc *gpio_to_desc(unsigned gpio)
  */
 static int desc_to_gpio(const struct gpio_desc *desc)
 {
-	return desc->chip->base + gpio_chip_hwgpio(desc);
+	return desc - &gpio_desc[0];
 }
 
 
@@ -187,15 +186,18 @@ struct gpio_chip *gpio_to_chip(unsigned gpio)
 static int gpiochip_find_base(int ngpio)
 {
 	struct gpio_chip *chip;
-	int base = ARCH_NR_GPIOS - ngpio;
 
+	int base = 0;
 	list_for_each_entry_reverse(chip, &gpio_chips, list) {
 		/* found a free space? */
 		if (chip->base + chip->ngpio <= base)
 			break;
-		else
+		else {
 			/* nope, check the space right before the chip */
-			base = chip->base - ngpio;
+			base = chip->base + ngpio;
+			if (base > ARCH_NR_GPIOS)
+				return -ENOSPC;
+		}
 	}
 
 	if (gpio_is_valid(base)) {
@@ -1214,14 +1216,13 @@ int gpiochip_add(struct gpio_chip *chip)
 		}
 	}
 
+	spin_unlock_irqrestore(&gpio_lock, flags);
+
 #ifdef CONFIG_PINCTRL
 	INIT_LIST_HEAD(&chip->pin_ranges);
 #endif
 
 	of_gpiochip_add(chip);
-
-unlock:
-	spin_unlock_irqrestore(&gpio_lock, flags);
 
 	if (status)
 		goto fail;
@@ -1235,6 +1236,9 @@ unlock:
 		chip->label ? : "generic");
 
 	return 0;
+
+unlock:
+	spin_unlock_irqrestore(&gpio_lock, flags);
 fail:
 	/* failures here can mean systems won't boot... */
 	pr_err("gpiochip_add: gpios %d..%d (%s) failed to register\n",

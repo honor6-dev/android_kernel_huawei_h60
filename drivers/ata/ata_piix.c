@@ -567,10 +567,7 @@ static void piix_set_timings(struct ata_port *ap, struct ata_device *adev,
 	u8 udma_enable;
 	int control = 0;
 
-	/*
-	 *	See Intel Document 298600-004 for the timing programing rules
-	 *	for ICH controllers.
-	 */
+
 
 	static const	 /* ISP  RTC */
 	u8 timings[][2]	= { { 0, 0 },

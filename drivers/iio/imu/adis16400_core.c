@@ -741,7 +741,7 @@ static struct adis16400_chip_info adis16400_chips[] = {
 		.channels = adis16350_channels,
 		.num_channels = ARRAY_SIZE(adis16350_channels),
 		.gyro_scale_micro = IIO_DEGREE_TO_RAD(73260), /* 0.07326 deg/s */
-		.accel_scale_micro = IIO_G_TO_M_S_2(2522), /* 0.002522 g */
+		.accel_scale_micro = IIO_G_TO_M_S_2(2522),
 		.temp_scale_nano = 145300000, /* 0.1453 C */
 		.temp_offset = 25000000 / 145300, /* 25 C = 0x00 */
 		.flags = ADIS16400_NO_BURST | ADIS16400_HAS_SLOW_MODE,

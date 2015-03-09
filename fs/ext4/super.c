@@ -43,6 +43,7 @@
 
 #include <linux/kthread.h>
 #include <linux/freezer.h>
+#include <linux/reboot.h>
 
 #include "ext4.h"
 #include "ext4_extents.h"	/* Needed for trace points definition */
@@ -51,8 +52,16 @@
 #include "acl.h"
 #include "mballoc.h"
 
+#include "ext4_dump_info.h"
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/ext4.h>
+
+#ifdef CONFIG_FEATURE_HUAWEI_EMERGENCY_DATA
+#include <asm/setup.h>
+extern unsigned int get_datamount_flag(void);
+extern unsigned int get_boot_into_recovery_flag(void);
+#endif
 
 static struct proc_dir_entry *ext4_proc_root;
 static struct kset *ext4_kset;
@@ -112,6 +121,18 @@ MODULE_ALIAS("ext3");
 #define IS_EXT3_SB(sb) ((sb)->s_bdev->bd_holder == &ext3_fs_type)
 #else
 #define IS_EXT3_SB(sb) (0)
+#endif
+
+#define EXT4_DMD_SUPPORT
+#ifdef EXT4_DMD_SUPPORT
+#include <linux/huawei/dsm_pub.h>
+#include <linux/delay.h>
+static struct dsm_dev dsm_ext4 = {
+        .name = "dsm_ext4",
+        .fops = NULL,
+        .buff_size = 16384,
+};
+struct dsm_client *ext4_dclient = NULL;
 #endif
 
 static int ext4_verify_csum_type(struct super_block *sb,
@@ -396,13 +417,43 @@ static void ext4_handle_error(struct super_block *sb)
 		if (journal)
 			jbd2_journal_abort(journal, -EIO);
 	}
+
+	dump_ext4_sb_info(sb);
+#ifdef EXT4_DMD_SUPPORT
+	dump_stack();
+	if (!dsm_client_ocuppy(ext4_dclient)) {
+		dsm_client_record(ext4_dclient, "EXT4-fs error\n");
+		dsm_client_notify(ext4_dclient, DSM_STORAGE_EXT4_ERROR_NO);
+	}
+	if (test_opt(sb, ERRORS_PANIC) || test_opt(sb, ERRORS_RO))
+		mdelay(5000);
+#endif
+
 	if (test_opt(sb, ERRORS_RO)) {
 		ext4_msg(sb, KERN_CRIT, "Remounting filesystem read-only");
 		sb->s_flags |= MS_RDONLY;
 	}
+
 	if (test_opt(sb, ERRORS_PANIC))
 		panic("EXT4-fs (device %s): panic forced after error\n",
 			sb->s_id);
+#ifdef CONFIG_FEATURE_HUAWEI_EMERGENCY_DATA
+    /*
+     * if is factory mode, same to orignal.
+     * if flag equal to 0, this phone boot not caused by ext4_handle_error, so reboot.
+     * if flag equal to 1, this phone boot caused by ext4_handle_error, so not reboot again.
+     */
+#ifndef TARGET_VERSION_FACTORY
+    if ((system_state == SYSTEM_RUNNING) && \
+		    (sb->s_bdev && sb->s_bdev->bd_part && sb->s_bdev->bd_part->info) && \
+		    (!strcmp(sb->s_bdev->bd_part->info->volname, "userdata")) && \
+		    (!strstr(saved_command_line, "mountfail")) && \
+		    get_datamount_flag() == 0 && get_boot_into_recovery_flag() == 0) {
+        printk(KERN_CRIT "ext4_handle_error reboot mountfail\n");
+        kernel_restart("mountfail");
+    }
+#endif
+#endif
 }
 
 void __ext4_error(struct super_block *sb, const char *function,
@@ -576,6 +627,18 @@ void __ext4_abort(struct super_block *sb, const char *function,
 			jbd2_journal_abort(EXT4_SB(sb)->s_journal, -EIO);
 		save_error_info(sb, function, line);
 	}
+
+	dump_ext4_sb_info(sb);
+#ifdef EXT4_DMD_SUPPORT
+	if (!dsm_client_ocuppy(ext4_dclient)) {
+		dump_stack();
+		dsm_client_record(ext4_dclient, "EXT4-fs error\n");
+		dsm_client_notify(ext4_dclient, DSM_STORAGE_EXT4_ERROR_NO);
+	}
+	if (test_opt(sb, ERRORS_PANIC) || test_opt(sb, ERRORS_RO))
+		mdelay(5000);
+#endif
+
 	if (test_opt(sb, ERRORS_PANIC))
 		panic("EXT4-fs panic from previous error\n");
 }
@@ -4053,6 +4116,8 @@ no_journal:
 	if (es->s_error_count)
 		mod_timer(&sbi->s_err_report, jiffies + 300*HZ); /* 5 minutes */
 
+	if (is_ext4_fs_dirty(sb))
+		dump_ext4_sb_info(sb);
 	kfree(orig_data);
 	return 0;
 
@@ -5384,6 +5449,11 @@ static int __init ext4_init_fs(void)
 	err = register_filesystem(&ext4_fs_type);
 	if (err)
 		goto out;
+
+#ifdef EXT4_DMD_SUPPORT
+        if (!ext4_dclient)
+                ext4_dclient = dsm_register_client(&dsm_ext4);
+#endif
 
 	return 0;
 out:

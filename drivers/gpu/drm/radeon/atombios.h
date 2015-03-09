@@ -1626,7 +1626,7 @@ typedef struct _PIXEL_CLOCK_PARAMETERS_V5
 	                           // =1: other external clock source, which is pre-defined
                              //     by VBIOS depend on the feature required.
                              // bit[7:5]: reserved.
-  ULONG  ulFbDivDecFrac;     // 20 bit feedback divider decimal fraction part, range from 1~999999 ( 0.000001 to 0.999999 )
+  ULONG  ulFbDivDecFrac;
 
 }PIXEL_CLOCK_PARAMETERS_V5;
 
@@ -1674,7 +1674,7 @@ typedef struct _PIXEL_CLOCK_PARAMETERS_V6
 	                           // =1: other external clock source, which is pre-defined                                            
                              //     by VBIOS depend on the feature required.
                              // bit[7:5]: reserved.
-  ULONG  ulFbDivDecFrac;     // 20 bit feedback divider decimal fraction part, range from 1~999999 ( 0.000001 to 0.999999 )
+  ULONG  ulFbDivDecFrac;
 
 }PIXEL_CLOCK_PARAMETERS_V6;
 

@@ -629,7 +629,6 @@ static int m88rs2000_set_frontend(struct dvb_frontend *fe)
 
 	offset = (s16)((s32)tuner_freq - c->frequency);
 
-	/* default mclk value 96.4285 * 2 * 1000 = 192857 */
 	if (((c->frequency % 192857) >= (192857 - 3000)) ||
 				(c->frequency % 192857) <= 3000)
 		ret = m88rs2000_writereg(state, 0x86, 0xc2);

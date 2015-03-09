@@ -1636,18 +1636,7 @@ apply_dcb_encoder_quirks(struct drm_device *dev, int idx, u32 *conn, u32 *conf)
 	struct nouveau_drm *drm = nouveau_drm(dev);
 	struct dcb_table *dcb = &drm->vbios.dcb;
 
-	/* Dell Precision M6300
-	 *   DCB entry 2: 02025312 00000010
-	 *   DCB entry 3: 02026312 00000020
-	 *
-	 * Identical, except apparently a different connector on a
-	 * different SOR link.  Not a clue how we're supposed to know
-	 * which one is in use if it even shares an i2c line...
-	 *
-	 * Ignore the connector on the second SOR link to prevent
-	 * nasty problems until this is sorted (assuming it's not a
-	 * VBIOS bug).
-	 */
+
 	if (nv_match_device(dev, 0x040d, 0x1028, 0x019b)) {
 		if (*conn == 0x02026312 && *conf == 0x00000020)
 			return false;

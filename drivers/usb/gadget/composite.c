@@ -20,6 +20,7 @@
 
 #include <linux/usb/composite.h>
 #include <asm/unaligned.h>
+#include <linux/huawei/usb/hw_rwswitch.h>
 
 /*
  * The code in this file is utility code, used to build a gadget driver
@@ -593,6 +594,7 @@ static void reset_config(struct usb_composite_dev *cdev)
 		bitmap_zero(f->endpoints, 32);
 	}
 	cdev->config = NULL;
+
 	cdev->delayed_status = 0;
 }
 
@@ -812,7 +814,7 @@ done:
 }
 EXPORT_SYMBOL_GPL(usb_add_config);
 
-static void remove_config(struct usb_composite_dev *cdev,
+static void unbind_config(struct usb_composite_dev *cdev,
 			      struct usb_configuration *config)
 {
 	while (!list_empty(&config->functions)) {
@@ -827,7 +829,6 @@ static void remove_config(struct usb_composite_dev *cdev,
 			/* may free memory for "f" */
 		}
 	}
-	list_del(&config->list);
 	if (config->unbind) {
 		DBG(cdev, "unbind config '%s'/%p\n", config->label, config);
 		config->unbind(config);
@@ -853,10 +854,12 @@ void usb_remove_config(struct usb_composite_dev *cdev,
 
 	if (cdev->config == config)
 		reset_config(cdev);
+	if (!list_empty(&cdev->configs))
+		list_del(&config->list);
 
 	spin_unlock_irqrestore(&cdev->lock, flags);
 
-	remove_config(cdev, config);
+	unbind_config(cdev, config);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -960,15 +963,6 @@ static int get_string(struct usb_composite_dev *cdev,
 		return s->bLength;
 	}
 
-	list_for_each_entry(uc, &cdev->gstrings, list) {
-		struct usb_gadget_strings **sp;
-
-		sp = get_containers_gs(uc);
-		len = lookup_string(sp, buf, language, id);
-		if (len > 0)
-			return len;
-	}
-
 	/* String IDs are device-scoped, so we look up each string
 	 * table we're told about.  These lookups are infrequent;
 	 * simpler-is-better here.
@@ -978,6 +972,7 @@ static int get_string(struct usb_composite_dev *cdev,
 		if (len > 0)
 			return len;
 	}
+
 	list_for_each_entry(c, &cdev->configs, list) {
 		if (c->strings) {
 			len = lookup_string(c->strings, buf, language, id);
@@ -991,6 +986,15 @@ static int get_string(struct usb_composite_dev *cdev,
 			if (len > 0)
 				return len;
 		}
+	}
+
+	list_for_each_entry(uc, &cdev->gstrings, list) {
+		struct usb_gadget_strings **sp;
+
+		sp = get_containers_gs(uc);
+		len = lookup_string(sp, buf, language, id);
+		if (len > 0)
+			return len;
 	}
 	return -EINVAL;
 }
@@ -1413,6 +1417,25 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 			break;
 		}
 		break;
+        case USB_REQ_VENDOR_SWITCH_MODE: {
+		int mode = 0, state = 0;
+
+		if ((ctrl->bRequestType != (USB_DIR_IN|USB_TYPE_VENDOR|USB_RECIP_DEVICE))
+		     || (w_index != 0))
+			goto unknown;
+
+		 /* Handle vendor customized request */
+		INFO(cdev, "vendor request: %d index: %d value: %d length: %d\n",
+			ctrl->bRequest, w_index, w_value, w_length);
+
+		mode = usb_port_mode_get();
+		state = usb_port_switch_request(w_value);  //manual switch USB mode
+		value = min(w_length, (u16)(sizeof(mode)+sizeof(state)));
+		memcpy(req->buf, &state, value/2);
+		memcpy(req->buf+value/2, &mode, value/2);
+            }
+            break;
+
 	default:
 unknown:
 		VDBG(cdev,
@@ -1485,6 +1508,11 @@ void composite_disconnect(struct usb_gadget *gadget)
 	struct usb_composite_dev	*cdev = get_gadget_data(gadget);
 	unsigned long			flags;
 
+	if (!cdev) {
+		printk(KERN_ERR "cdev is not ready!\n");
+		return ;
+	}
+
 	/* REVISIT:  should we have config and device level
 	 * disconnect callbacks?
 	 */
@@ -1525,7 +1553,8 @@ static void __composite_unbind(struct usb_gadget *gadget, bool unbind_driver)
 		struct usb_configuration	*c;
 		c = list_first_entry(&cdev->configs,
 				struct usb_configuration, list);
-		remove_config(cdev, c);
+		list_del(&c->list);
+		unbind_config(cdev, c);
 	}
 	if (cdev->driver->unbind && unbind_driver)
 		cdev->driver->unbind(cdev);

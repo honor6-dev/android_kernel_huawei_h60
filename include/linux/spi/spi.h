@@ -667,7 +667,7 @@ extern int spi_sync(struct spi_device *spi, struct spi_message *message);
 extern int spi_sync_locked(struct spi_device *spi, struct spi_message *message);
 extern int spi_bus_lock(struct spi_master *master);
 extern int spi_bus_unlock(struct spi_master *master);
-
+extern void spi0_clk_ctrl(bool on);
 /**
  * spi_write - SPI synchronous write
  * @spi: device to which data will be written

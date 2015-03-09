@@ -2216,7 +2216,6 @@ static int exec_drive_taskfile(struct driver_data *dd,
 
 	taskout = req_task->out_size;
 	taskin = req_task->in_size;
-	/* 130560 = 512 * 0xFF*/
 	if (taskin > 130560 || taskout > 130560) {
 		err = -EINVAL;
 		goto abort;

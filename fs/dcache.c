@@ -1664,6 +1664,10 @@ struct dentry *d_add_ci(struct dentry *dentry, struct inode *inode,
 	struct dentry *found;
 	struct dentry *new;
 
+    if (IS_ERR(inode)) {
+        return ERR_CAST(inode);
+    }
+
 	/*
 	 * First check if a dentry matching the name already exists,
 	 * if not go ahead and create it now.
