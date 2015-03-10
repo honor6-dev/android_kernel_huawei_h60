@@ -1205,7 +1205,7 @@ err_rxdesc:
 err_tx_sgmap:
 	dev_dbg(&pl022->adev->dev, "err_tx_sgmap\n");
 	dma_unmap_sg(rxchan->device->dev, pl022->sgt_rx.sgl,
-		     pl022->sgt_tx.nents, DMA_FROM_DEVICE);
+		     pl022->sgt_rx.nents, DMA_FROM_DEVICE);
 err_rx_sgmap:
 	dev_dbg(&pl022->adev->dev, "err_rx_sgmap\n");
 	sg_free_table(&pl022->sgt_tx);
