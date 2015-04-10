@@ -17,6 +17,7 @@
 
 #include <mali_kbase_gpu_memory_debugfs.h>
 
+#ifdef CONFIG_DEBUG_FS
 /** Show callback for the @c gpu_memory debugfs file.
  *
  * This function is called to get the contents of the @c gpu_memory debugfs
@@ -37,7 +38,7 @@ static int kbasep_gpu_memory_seq_show(struct seq_file *sfile, void *data)
 	kbdev_list = kbase_dev_list_get();
 	list_for_each(entry, kbdev_list) {
 		struct kbase_device *kbdev = NULL;
-		kbasep_kctx_list_element *element;
+		struct kbasep_kctx_list_element *element;
 
 		kbdev = list_entry(entry, struct kbase_device, entry);
 		/* output the total memory usage and cap for this device */
@@ -48,12 +49,10 @@ static int kbasep_gpu_memory_seq_show(struct seq_file *sfile, void *data)
 		list_for_each_entry(element, &kbdev->kctx_list, link) {
 			/* output the memory usage and cap for each kctx
 			* opened on this device */
-			ret = seq_printf(sfile, "  %s-0x%p %10u %10u %10u\n", \
+			ret = seq_printf(sfile, "  %s-0x%p %10u\n", \
 				"kctx",
 				element->kctx, \
-				element->kctx->pid, \
-				atomic_read(&(element->kctx->used_pages)), \
-				atomic_read(&(element->kctx->nonmapped_pages)));
+				atomic_read(&(element->kctx->used_pages)));
 		}
 		mutex_unlock(&kbdev->kctx_list_lock);
 	}
@@ -73,13 +72,13 @@ static const struct file_operations kbasep_gpu_memory_debugfs_fops = {
 	.open = kbasep_gpu_memory_debugfs_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = single_release,
+	.release = seq_release_private,
 };
 
 /*
  *  Initialize debugfs entry for gpu_memory
  */
-mali_error kbasep_gpu_memory_debugfs_init(kbase_device *kbdev)
+mali_error kbasep_gpu_memory_debugfs_init(struct kbase_device *kbdev)
 {
 	kbdev->gpu_memory_dentry = debugfs_create_file("gpu_memory", \
 					S_IRUGO, \
@@ -95,8 +94,19 @@ mali_error kbasep_gpu_memory_debugfs_init(kbase_device *kbdev)
 /*
  *  Terminate debugfs entry for gpu_memory
  */
-void kbasep_gpu_memory_debugfs_term(kbase_device *kbdev)
+void kbasep_gpu_memory_debugfs_term(struct kbase_device *kbdev)
 {
 	debugfs_remove(kbdev->gpu_memory_dentry);
 }
-
+#else
+/*
+ * Stub functions for when debugfs is disabled
+ */
+mali_error kbasep_gpu_memory_debugfs_init(struct kbase_device *kbdev)
+{
+	return MALI_ERROR_NONE;
+}
+void kbasep_gpu_memory_debugfs_term(struct kbase_device *kbdev)
+{
+}
+#endif

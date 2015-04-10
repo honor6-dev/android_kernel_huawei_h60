@@ -21,6 +21,7 @@
 #include <mali_kbase.h>
 #include <mali_kbase_defs.h>
 #include <mali_kbase_config.h>
+#include <mali_kbase_pm.h>
 
 #include <linux/opp.h>
 #include <linux/pm_runtime.h>
@@ -35,9 +36,6 @@
  * and config_attributes_hw_issue_8408[]. Settings are not shared for
  * JS_HARD_STOP_TICKS_SS and JS_RESET_TICKS_SS.
  */
-#define KBASE_VE_GPU_FREQ_KHZ_MAX               5000
-#define KBASE_VE_GPU_FREQ_KHZ_MIN               5000
-
 #define KBASE_VE_JS_SCHEDULING_TICK_NS_DEBUG    15000000u      /* 15ms, an agressive tick for testing purposes. This will reduce performance significantly */
 #define KBASE_VE_JS_SOFT_STOP_TICKS_DEBUG       1	/* between 15ms and 30ms before soft-stop a job */
 #define KBASE_VE_JS_SOFT_STOP_TICKS_CL_DEBUG    1	/* between 15ms and 30ms before soft-stop a CL job */
@@ -64,7 +62,7 @@
 
 #define KBASE_VE_JS_RESET_TIMEOUT_MS            3000	/* 3s before cancelling stuck jobs */
 #define KBASE_VE_JS_CTX_TIMESLICE_NS            1000000	/* 1ms - an agressive timeslice for testing purposes (causes lots of scheduling out for >4 ctxs) */
-#define KBASE_VE_SECURE_BUT_LOSS_OF_PERFORMANCE	((uintptr_t)MALI_FALSE)	/* By default we prefer performance over security on r0p0-15dev0 and KBASE_CONFIG_ATTR_ earlier */
+
 #define KBASE_VE_POWER_MANAGEMENT_CALLBACKS     ((uintptr_t)&pm_callbacks)
 #define KBASE_PLATFORM_CALLBACKS                ((uintptr_t)&platform_funcs)
 
@@ -76,8 +74,9 @@ static kbase_io_resources io_resources = {
 	.mmu_irq_number = 69,
 	.gpu_irq_number = 70,
 	.io_memory_region = {
-			     .start = 0xFC010000,
-			     .end = 0xFC010000 + (4096 * 4) - 1}
+	.start = 0xFC010000,
+	.end = 0xFC010000 + (4096 * 4) - 1
+	}
 };
 #endif
 
@@ -87,7 +86,7 @@ static kbase_io_resources io_resources = {
 #define STOP_POLLING		0
 
 #ifdef CONFIG_REPORT_VSYNC
-static kbase_device *kbase_dev;
+static struct kbase_device *kbase_dev;
 #endif
 
 static inline void kbase_platform_on(struct kbase_device *kbdev)
@@ -140,8 +139,11 @@ static int mali_kbase_get_dev_status(struct device *dev,
 				      struct devfreq_dev_status *stat)
 {
 	struct kbase_device *kbdev = (struct kbase_device *)dev->platform_data;
+#ifdef CONFIG_MALI_MIDGARD_DVFS
+    enum kbase_pm_dvfs_action action;
 
-	(void)kbase_pm_get_dvfs_action(kbdev);
+	action = kbase_pm_get_dvfs_action(kbdev);
+#endif /*CONFIG_MALI_MIDGARD_DVFS */
 	stat->busy_time = kbdev->pm.metrics.utilisation;
 	stat->total_time = 100;
 	stat->private_data = (void *)kbdev->pm.metrics.vsync_hit;
@@ -168,12 +170,12 @@ EXPORT_SYMBOL(mali_kbase_pm_report_vsync);
 #endif
 
 #ifdef CONFIG_MALI_MIDGARD_DVFS
-int kbase_platform_dvfs_event(struct kbase_device *kbdev, u32 utilisation)
+int kbase_platform_dvfs_event(struct kbase_device *kbdev, u32 utilisation, u32 util_gl_share, u32 util_cl_share[2])
 {
 	return 1;
 }
 
-int kbase_platform_dvfs_enable(kbase_device *kbdev, bool enable, int freq)
+int kbase_platform_dvfs_enable(struct kbase_device *kbdev, bool enable, int freq)
 {
 	unsigned long flags;
 
@@ -197,7 +199,7 @@ int kbase_platform_dvfs_enable(kbase_device *kbdev, bool enable, int freq)
 
 	return 1;
 }
-#endif
+#endif /*CONFIG_MALI_MIDGARD_DVFS */
 
 static mali_bool kbase_platform_init(struct kbase_device *kbdev)
 {
@@ -261,7 +263,7 @@ kbase_platform_funcs_conf platform_funcs = {
 };
 
 #ifdef CONFIG_MALI_MIDGARD_RT_PM
-static int pm_callback_power_on(kbase_device *kbdev)
+static int pm_callback_power_on(struct kbase_device *kbdev)
 {
 	int result;
 	int ret_val;
@@ -287,7 +289,7 @@ static int pm_callback_power_on(kbase_device *kbdev)
 	return ret_val;
 }
 
-static void pm_callback_power_off(kbase_device *kbdev)
+static void pm_callback_power_off(struct kbase_device *kbdev)
 {
 	struct device *dev = kbdev->dev;
 	int ret = 0, retry = 0;
@@ -325,19 +327,19 @@ static void pm_callback_power_off(kbase_device *kbdev)
 	}
 }
 
-static mali_error pm_callback_runtime_init(kbase_device *kbdev)
+static mali_error pm_callback_runtime_init(struct kbase_device *kbdev)
 {
 	pm_suspend_ignore_children(kbdev->dev, true);
 	pm_runtime_enable(kbdev->dev);
 	return MALI_ERROR_NONE;
 }
 
-static void pm_callback_runtime_term(kbase_device *kbdev)
+static void pm_callback_runtime_term(struct kbase_device *kbdev)
 {
 	pm_runtime_disable(kbdev->dev);
 }
 
-static void pm_callback_runtime_off(kbase_device *kbdev)
+static void pm_callback_runtime_off(struct kbase_device *kbdev)
 {
 #ifdef CONFIG_PM_DEVFREQ
 	devfreq_suspend_device(kbdev->devfreq);
@@ -348,7 +350,7 @@ static void pm_callback_runtime_off(kbase_device *kbdev)
 	kbase_platform_off(kbdev);
 }
 
-static int pm_callback_runtime_on(kbase_device *kbdev)
+static int pm_callback_runtime_on(struct kbase_device *kbdev)
 {
 	kbase_platform_on(kbdev);
 
@@ -396,15 +398,7 @@ static kbase_pm_callback_conf pm_callbacks = {
 #endif
 
 /* Please keep table config_attributes in sync with config_attributes_hw_issue_8408 */
-static kbase_attribute config_attributes[] = {
-	{
-	 KBASE_CONFIG_ATTR_GPU_FREQ_KHZ_MAX,
-	 KBASE_VE_GPU_FREQ_KHZ_MAX},
-
-	{
-	 KBASE_CONFIG_ATTR_GPU_FREQ_KHZ_MIN,
-	 KBASE_VE_GPU_FREQ_KHZ_MIN},
-
+static struct kbase_attribute config_attributes[] = {
 #ifdef CONFIG_MALI_DEBUG
 /* Use more aggressive scheduling timeouts in debug builds for testing purposes */
 	{
@@ -497,26 +491,18 @@ static kbase_attribute config_attributes[] = {
 	 KBASE_PLATFORM_CALLBACKS},
 
 	{
-	 KBASE_CONFIG_ATTR_SECURE_BUT_LOSS_OF_PERFORMANCE,
-	 KBASE_VE_SECURE_BUT_LOSS_OF_PERFORMANCE},
-
-	{
-	 KBASE_CONFIG_ATTR_GPU_IRQ_THROTTLE_TIME_US,
-	 20},
-
-	{
 	 KBASE_CONFIG_ATTR_END,
 	 0}
 };
 
-static kbase_platform_config k3v3_platform_config = {
+static struct kbase_platform_config k3v3_platform_config = {
 	.attributes = config_attributes,
 #ifndef CONFIG_OF
 	.io_resources = &io_resources
 #endif
 };
 
-kbase_platform_config *kbase_get_platform_config(void)
+struct kbase_platform_config *kbase_get_platform_config(void)
 {
 	return &k3v3_platform_config;
 }
